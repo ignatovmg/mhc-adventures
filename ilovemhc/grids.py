@@ -118,12 +118,15 @@ class GridMaker():
             return Image(filename="a.gif.png")
         return 1
 
-    def make_grid(self, savepath, inputpdb, binsize):
-        tmp_file = intputpdb + '.tmp'
+    def make_grid(self, savepath, inputpdb, binsize, remove_tmp=True):
+        tmp_file = inputpdb + '.tmp'
         utils.hsd2his(inputpdb, tmp_file)
         
         call = [self.grid_bin, tmp_file, self.properties_file, self.types_file, str(binsize), savepath]
-        shell_call(call)
+        output = shell_call(call)
+        
+        if remove_tmp:
+            remove_files([tmp_file])
 
     def make_grids(self, savedir, pdblist, binsize):
         table = []

@@ -9,6 +9,7 @@ def throw_error(msg):
     sys.exit(1)
 
 def file_is_empty(path):
+    file_absent_error(path)
     return os.stat(path).st_size == 0
 
 def file_is_empty_error(path):
@@ -27,7 +28,7 @@ def file_absent_error(path):
         throw_error('File %s doesn\'t exist' % path)
         
 def shell_call(call):
-    print(subprocess.check_output(call, stderr=subprocess.STDOUT))
+    return subprocess.check_output(call, stderr=subprocess.STDOUT)
 
 def remove_files(path_list):
     shell_call(['rm', '-f'] + path_list)

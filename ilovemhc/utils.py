@@ -153,6 +153,8 @@ def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=Fals
 
         if linei == len(lines1) - 1:
             prevresi = ''
+            
+    f.write('END\n')
     f.close()
 
 def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE, change_his=True, remove_tmp=True):
@@ -221,11 +223,19 @@ def peptide_calc_bb_rsmd(pdb1, pdb2):
     rmsd = np.sqrt(rmsd / n)
     return rmsd
 
-def rmsd_ref_vs_models(ref, models, backbone=False):
+def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
+    bb_names = ['CA', 'N', 'CB', 'O', 'C']
+    
     with open(ref, 'r') as f:
         reflines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
         refcrds = []
         for line in reflines:
+            if only_chain_b and line[21] != 'B':
+                continue
+                
+            if backbone and (line[12:16].strip() not in bb_names):
+                continue
+                
             coords = [line[30:38], line[38:46], line[46:54]]
             label  = map(str.strip, [line[12:16], line[17:20], line[22:26]])
             refcrds.append((tuple(label), np.array(map(float, coords))))
@@ -241,6 +251,12 @@ def rmsd_ref_vs_models(ref, models, backbone=False):
                 id = line.split()[1]
                 continue
             if line.startswith('ATOM') or line.startswith('HETATM'):
+                if only_chain_b and line[21] != 'B':
+                    continue
+                
+                if backbone and (line[12:16].strip() not in bb_names):
+                    continue
+                
                 coords = line[30:38], line[38:46], line[46:54]
                 label  = map(str.strip, [line[12:16], line[17:20], line[22:26]])
                 lines.append((tuple(label), np.array(map(float, coords))))
@@ -248,8 +264,7 @@ def rmsd_ref_vs_models(ref, models, backbone=False):
                 rmsd = 0.0
                 n = 0
                 for label, crd in lines:
-                    if backbone and (label[0] not in ['CA', 'N', 'CB', 'O', 'C']):
-                        continue
+
 
                     if label in refcrd:
                         crd1 = refcrd[label]
@@ -265,3 +280,18 @@ def rmsd_ref_vs_models(ref, models, backbone=False):
                 rmsd = np.sqrt(rmsd/n)
                 print('%s %.3f' % (id, rmsd))
                 lines = []
+                
+def conv3d_output_shape(h_w_d, kernel_size=1, stride=1, pad=0, dilation=1, ceil_flag=False):
+    """
+    Utility function for computing output of convolutions
+    takes a tuple of (h,w) and returns a tuple of (h,w)
+    """
+    from math import floor, ceil
+    if type(kernel_size) is not tuple:
+        kernel_size = (kernel_size, kernel_size, kernel_size)
+        
+    rnd = ceil if ceil_flag else floor
+    h = rnd(((h_w_d[0] + (2 * pad) - ( dilation * (kernel_size[0] - 1) ) - 1 )/ stride) + 1)
+    w = rnd(((h_w_d[1] + (2 * pad) - ( dilation * (kernel_size[1] - 1) ) - 1 )/ stride) + 1)
+    d = rnd(((h_w_d[2] + (2 * pad) - ( dilation * (kernel_size[2] - 1) ) - 1 )/ stride) + 1)
+    return h, w, d

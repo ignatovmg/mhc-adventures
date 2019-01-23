@@ -1,0 +1,3 @@
+recursive-include ilovemhc/src *
+include ilovemhc/bin/*
+include LICENSE README.md
