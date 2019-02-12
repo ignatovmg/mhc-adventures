@@ -9,7 +9,6 @@ MOL_PRM_DIR = os.path.join(SRC_DIR, 'prepare_pdb/mol-prms')
 PDB_PREP_DIR = os.path.join(SRC_DIR, 'prepare_pdb/pdbprep')
 GRID_DIR = os.path.join(SRC_DIR, 'grid_maker')
 TEST_DIR = os.path.join(PACKAGE_ROOT, 'data/test_data')
-GDOMAINS_DIR = os.path.join('/gpfs/projects/KozakovGroup/mhc_learning/gdomains')
 
 # parameters
 RTF22_FILE = os.path.join(MOL_PRM_DIR, 'top_all22_prot.rtf')
@@ -25,3 +24,9 @@ PDBPREP_EXE = os.path.join(PDB_PREP_DIR, 'pdbprep.pl')
 PDBNMD_EXE = os.path.join(PDB_PREP_DIR, 'pdbnmd.pl')
 GRID_EXE = os.path.join(BIN_DIR, 'property_grid')
 REDUCE_EXE = '/gpfs/projects/KozakovGroup/reduce.3.23.130521.linuxi386'
+SCWRL_EXE = '/gpfs/projects/KozakovGroup/software/scwrl4/Scwrl4'
+
+# external
+GDOMAINS_DIR = '/gpfs/projects/KozakovGroup/mhc_learning/gdomains'
+PLIP_DIR = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/plip-stable'
+TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/gdomains-complete.csv'

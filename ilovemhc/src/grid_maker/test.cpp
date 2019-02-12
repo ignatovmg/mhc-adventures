@@ -1,3 +1,8 @@
+#include <Python.h>
+
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/arrayobject.h>
+
 #include <stdio.h>
 #include <math.h>
 #include <malloc.h>
@@ -26,40 +31,16 @@
 
 #define MIN(x, y) (x) <= (y) ? (x) : (y)
 
-#define KNRM  "\x1B[0m"
-#define KRED  "\x1B[31m"
-#define KGRN  "\x1B[32m"
-#define KYEL  "\x1B[33m"
-#define KBLU  "\x1B[34m"
-#define KMAG  "\x1B[35m"
-#define KCYN  "\x1B[36m"
-#define KWHT  "\x1B[37m"
-
 #define STRINGIZE(X) #X
 #define TOSTRING(X) STRINGIZE(X)
-#define MSG_ERR(...) {                                       \
-    fprintf(stderr, KRED "[ERROR] (" __FILE__                \
-    ", " TOSTRING(__LINE__) ") : " __VA_ARGS__);             \
-    fprintf(stderr, KNRM);                                   \
-    exit(EXIT_FAILURE);                                      \
+#define MSG_ERR(...) {                                                                    \
+    sprintf(err, __FILE__ ", line " TOSTRING(__LINE__) ": " __VA_ARGS__);      \
+    PyErr_SetString(MolgridError, err);                                                   \
 }
 
-#define MSG_WNG(...) {                                       \
-    fprintf(stderr, KYEL "[WARNING] (" __FILE__              \
-    ", " TOSTRING(__LINE__) ") : " __VA_ARGS__);             \
-    fprintf(stderr, KNRM);                                   \
-}
+static PyObject *MolgridError;
 
-#define MSG_INFO(...) {                                      \
-    if (verbosity > 0) {                                     \
-        fprintf(stdout, KBLU "[INFO] : " __VA_ARGS__);       \
-        fprintf(stdout, KNRM);                               \
-    }                                                        \
-}
-
-int verbosity = 1;
-
-int get_element_index(char* channels, char val) {
+static int get_element_index(char* channels, char val) {
     for (int i = 0; i < NELE; i++) {
         if (val == channels[i]) {
             return i;
@@ -68,50 +49,64 @@ int get_element_index(char* channels, char val) {
     return -1;
 }
 
-int main(int argc, char** argv) {
-    if (argc != 7) {
-        MSG_ERR("Not enough arguments\nUsage: %s input.pdb properties.csv names.csv 0.5 7 output.bin\n", argv[0]);
-    }
+static float* compute_grid(const char* pdb_file, 
+                    const char* type2properties_file, 
+                    const char* name2type_file, 
+                    float bin, int nch, long int* dims) {
     
-    int argvi = 1;
-    char* pdb_file = argv[argvi++]; // .pdb
-    char* type2properties_file = argv[argvi++]; // .pdb
-    char* name2type_file = argv[argvi++]; // .pdb
-    float bin = atof(argv[argvi++]); // bin size in angstroms
-    int nch = atoi(argv[argvi++]); // number of channels
-    char* out_file = argv[argvi++]; // .bin
-
+    char err[500];
     std::map<std::string, float*> t2p; 
     std::map<std::string, std::string> n2t;
    
     std::string linebuf;
     std::ifstream infile(type2properties_file);
-    std::getline(infile, linebuf);
-
-    // read atomic property table
-    int id;
-    //std::array<float, NCH> ar;
-    std::string atom_type;
-    while(infile >> id >> atom_type) {
-        float* ar = new float[nch];
-        for (int i = 0; i < nch; i++) {
-            infile >> ar[i];
-        }
-        t2p[atom_type] = ar;
+    
+    if (!infile) {
+        MSG_ERR("File %s couldn't be opened", type2properties_file);
+        return NULL;
     }
-    infile.close();
+    
+    try {
+        std::getline(infile, linebuf);
+
+        // read atomic property table
+        int id;
+        //std::array<float, NCH> ar;
+        std::string atom_type;
+        while(infile >> id >> atom_type) {
+            float* ar = new float[nch];
+            for (int i = 0; i < nch; i++) {
+                infile >> ar[i];
+            }
+            t2p[atom_type] = ar;
+        }
+        infile.close();
+    } catch (int e) {
+        //PyErr_SetString(MolgridError, "Exception occured, while reading type2properties_file");
+        MSG_ERR("Exception occured, while reading %s", type2properties_file);
+        return NULL;
+    }
 
     // read charmm22 atomname -> atom type table
     infile.open(name2type_file);
-    while(std::getline(infile, linebuf)) {
-        n2t[linebuf.substr(0, 8)] = linebuf.substr(9, 4);
+    if (!infile) {
+        MSG_ERR("File %s couldn't be opened", name2type_file);
+        return NULL;
     }
-    infile.close();
+    
+    try {
+        while(std::getline(infile, linebuf)) {
+            n2t[linebuf.substr(0, 8)] = linebuf.substr(9, 4);
+        }
+        infile.close();
+    } catch (int e) {
+        MSG_ERR("Exception occured, while reading %s", name2type_file);
+        return NULL;
+    }
 
     char elements[NELE] = {'H', 'C', 'N', 'O', 'S'};
     float vdw_radii[NELE] = {1.2, 1.7, 1.55, 1.52, 1.8};
     float rad_mult = 1.5;
-    //float bin = atof(bin_char); //1.0;
 
     // precomputed maximum borders of peptide 
     // over all available MHC-peptide structures
@@ -126,9 +121,9 @@ int main(int argc, char** argv) {
     lower[1] = floor(lower[1] - padding);
     lower[2] = floor(lower[2] - padding);
     
-    MSG_INFO("Input PDB %s\n", pdb_file);
-    MSG_INFO("Lower bound: (%.3f, %.3f, %.3f)\n", lower[0], lower[1], lower[2]);
-    MSG_INFO("Upper bound: (%.3f, %.3f, %.3f)\n", upper[0], upper[1], upper[2]);
+    //MSG_INFO("Input PDB %s\n", pdb_file);
+    //MSG_INFO("Lower bound: (%.3f, %.3f, %.3f)\n", lower[0], lower[1], lower[2]);
+    //MSG_INFO("Upper bound: (%.3f, %.3f, %.3f)\n", upper[0], upper[1], upper[2]);
 
     // tabulate pseudo-gauss function
     // taken from here 10.1021/acs.jcim.6b00740
@@ -137,6 +132,12 @@ int main(int argc, char** argv) {
     for (int c = 0; c < NELE; c++) {
         int nvals = (int)ceil(vdw_radii[c] * rad_mult / stride_tab) + 1;
         gauss_tab[c] = (float*)calloc(nvals, sizeof(float));
+        
+        if (gauss_tab[c] == NULL) {
+            MSG_ERR("Variable 'gauss_tab[%i]' couldn't be allocated", c);
+            return NULL;
+        }
+        
         float d, r = vdw_radii[c];
         
         for (int i = 0; i < nvals; i++) {
@@ -145,27 +146,32 @@ int main(int argc, char** argv) {
         }
     }
     
-    long dims[4] = {(int)nch*2, // number of channels
-                    (int)ceil((upper[0]-lower[0]) / bin) + 1, // dimensions of spacial
-                    (int)ceil((upper[1]-lower[1]) / bin) + 1, // part of cnn input
-                    (int)ceil((upper[2]-lower[2]) / bin) + 1};
+    //dims = {(long int)nch*2, // number of channels
+    //                (long int)ceil((upper[0]-lower[0]) / bin) + 1, // dimensions of spacial
+    //                (long int)ceil((upper[1]-lower[1]) / bin) + 1, // part of cnn input
+    //                (long int)ceil((upper[2]-lower[2]) / bin) + 1};
     
-    MSG_INFO("Output dimensions: (%i, %i, %i, %i)\n", dims[0], dims[1], dims[2], dims[3]);
+    dims[0] = (long int)nch*2;
+    dims[1] = (long int)ceil((upper[0]-lower[0]) / bin) + 1;
+    dims[2] = (long int)ceil((upper[1]-lower[1]) / bin) + 1;
+    dims[3] = (long int)ceil((upper[2]-lower[2]) / bin) + 1;
 
     float xyz[3]; // atomic coordinates
     long total_size = dims[0]*dims[1]*dims[2]*dims[3];
     float* array = (float*)calloc(total_size, sizeof(float)); // cnn input
     
-    MSG_INFO("Output size: %i x %i = %i (bytes) = %.3f (Mb)\n", 
-             total_size, 
-             sizeof(float), 
-             total_size * sizeof(float), 
-             total_size * sizeof(float) / 1024. / 1024.);
+    if (array == NULL) {
+        MSG_ERR("Variable 'array' couldn't be allocated");
+        return NULL;
+    }
     
     std::string line;
     infile.open(pdb_file);
-    if (!infile.is_open()) {
-        MSG_ERR("Couldn't open the file %s\n", pdb_file);
+    
+    if (!infile) {
+        MYFREE(array);
+        MSG_ERR("File %s couldn't be opened", pdb_file);
+        return NULL;
     }
 
     // read only ^ATOM lines
@@ -175,9 +181,11 @@ int main(int argc, char** argv) {
             char chain  = line[21];
             char ele    = line[77];
             int ele_id  = get_element_index(elements, ele);
+            
             if (ele_id == -1) {
-                MSG_WNG("Couldn't find the query element: '%c'\n", ele);
-                continue;
+                MYFREE(array);
+                MSG_ERR("Couldn't find element '%c' in table", ele);
+                return NULL;
             }
             
             std::string atomname = line.substr(12, 8);
@@ -187,15 +195,17 @@ int main(int argc, char** argv) {
             try {
                 typen = n2t.at(atomname);
             } catch (std::out_of_range e) {
-                std::cout << "Atom name '" << atomname << "' not found in the table" << std::endl;
-                continue;
+                MYFREE(array);
+                MSG_ERR("Atom name '%s' not found in the name table", atomname.c_str());
+                return NULL;
             }
             //std::cout << typen;
             try {
                 ppts = t2p.at(typen);
             } catch (std::out_of_range e) {
-                std::cout << "Atom type '" << typen << "' not found in the property table" << std::endl;
-                continue;
+                MYFREE(array);
+                MSG_ERR("Atom type '%s' not found in the property table", typen.c_str());
+                return NULL;
             }
             //for (auto rr : ppts) {
             //    std::cout << rr << " ";
@@ -232,7 +242,9 @@ int main(int argc, char** argv) {
                 } else if (chain == 'B') {
                     channel = c + nch;
                 } else {
-                    MSG_ERR("Wrong chain ID (must be A or B): '%c'\n", chain);
+                    MYFREE(array);
+                    MSG_ERR("Chain must be either A (receptor) or B (ligand). Chain '%c' provided instead", chain);
+                    return NULL;
                 }
 
                 long ptr = channel*dims[1]*dims[2]*dims[3];
@@ -257,19 +269,59 @@ int main(int argc, char** argv) {
         }
     }    
     
-    FILE* fp = fopen(out_file, "w");
-    fwrite(&total_size, sizeof(long), 1, fp);
-    fwrite(dims, sizeof(long), 4, fp);
-    fwrite(array, sizeof(float), total_size, fp);
-    fclose(fp);
-    
-    MSG_INFO("Output written to %s\n", out_file);
-    MSG_INFO("Output format: total_size (1 x int%i), dimensions (4 x int%i), values (n x float%i)\n",
-             sizeof(long), sizeof(long), sizeof(float));
-    
     for (int i = 0; i < NELE; i++) {
         MYFREE(gauss_tab[i]);
     }
-    MYFREE(array);
-    return 0;
+    
+    return array;
+}
+
+
+static PyObject* make_grid(PyObject *self, PyObject *args)
+{
+    //const char* command;
+    const char* pdb_file; // .pdb
+    const char* type2properties_file; // .pdb
+    const char* name2type_file; // .pdb
+    float bin; // bin size in angstroms
+    int nch; // number of channels
+    
+    char err[500];
+    
+    if (!PyArg_ParseTuple(args, "sssfi", &pdb_file, &type2properties_file, &name2type_file, &bin, &nch)) {
+        return NULL;
+    }
+    
+    long int dims[4];
+    float* array = compute_grid(pdb_file, type2properties_file, name2type_file, bin, nch, dims);
+    if (array == NULL) {
+        return NULL;
+    }
+    
+    PyObject* output = PyArray_SimpleNewFromData(4, dims, NPY_FLOAT, array);
+    if (output == NULL) {
+        MYFREE(array);
+        MSG_ERR("Couldn't convert array to PyObject*");
+        return NULL;
+    }
+    
+    return output;
+}
+
+static PyMethodDef MolgridMethods[] = {
+    {"make_grid",  make_grid, METH_VARARGS, "Execute a shell command."},
+    {NULL, NULL, 0, NULL}
+};
+
+PyMODINIT_FUNC
+initmolgrid(void) {
+    PyObject* m = Py_InitModule("molgrid", MolgridMethods);
+    if (m == NULL) {
+        return;
+    }
+    import_array();
+    
+    MolgridError = PyErr_NewException("molgrid.MolgridError", NULL, NULL);
+    Py_INCREF(MolgridError);
+    PyModule_AddObject(m, "MolgridError", MolgridError);
 }

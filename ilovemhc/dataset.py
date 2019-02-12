@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import traceback
 
 import torch
 from torch.utils.data import Dataset
@@ -20,7 +21,8 @@ class MolDataset(Dataset):
                  grid_transform=None,
                  pdb_transform=None,
                  target_transform=None,
-                 add_index=False):
+                 add_index=False, 
+                 remove_grid=False):
         """
         Args:
             csv_table (pandas.DataFrame): Must contain columns 'path' and 'target'
@@ -47,6 +49,7 @@ class MolDataset(Dataset):
         self.target_transform = target_transform
         self.input_is_pdb = input_is_pdb
         self.add_index = add_index
+        self.remove_grid = remove_grid
         
         if self.input_is_pdb:
             self.bin_size = bin_size
@@ -69,16 +72,18 @@ class MolDataset(Dataset):
             # transform pdb if needed
             if self.pdb_transform:
                 full_path = self.pdb_transform(full_path)
-                
-            grid_path = full_path + '.bin'
-            self.grid_maker.make_grid(grid_path, full_path, self.bin_size)
+
+            #grid_path = full_path + '.' + str(os.getpid()) + '.bin'
+            #self.grid_maker.make_grid(grid_path, full_path, self.bin_size)
+            grid = self.grid_maker.make_grid(full_path, self.bin_size)
         else:
             grid_path = full_path
+            dims, grid = self.grid_maker.read_grid(grid_path)
+            grid = grid.reshape(dims)
             
-        # read grid
-        dims, grid = self.grid_maker.read_grid(grid_path)
-        grid = grid.reshape(dims)
-        
+            if self.remove_grid:
+                remove_files([grid_path])
+
         # trasform grid
         if self.grid_transform:
             grid = self.grid_transform(grid)
@@ -90,7 +95,6 @@ class MolDataset(Dataset):
         if self.target_transform:
             target = self.target_transform(target)
         
-        #label = 1.0 / (1.0 + np.exp((rmsd-3) * 1.5))
         if self.add_index:
             sample = (grid.type(torch.FloatTensor), np.float32(target), np.long(idx))
         else:

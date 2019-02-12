@@ -30,22 +30,6 @@ def _cuda_avail():
     print('Using ' + str(device))
     
     return avail, device
-
-class ModelClass_Toy(nn.Module):
-    def __init__(self, input_shape):
-        super(ModelClass_Toy, self).__init__()
-        self.input_shape = input_shape
-        self.fc1 = nn.Linear(self.input_shape.prod(), 512)
-        self.fc2 = nn.Linear(512, 128)
-        self.fc3 = nn.Linear(128, 1)
-        
-    def forward(self, x):
-        x = x.view(-1, self.input_shape.prod())
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        x = torch.sigmoid(x)
-        return x
     
 class ModelClass_Probe(nn.Module):
     def __init__(self, input_shape):
@@ -102,11 +86,7 @@ class ModelClass_Probe(nn.Module):
         x = torch.sigmoid(x)
         return x
     
-    
 if __name__ == '__main__':
-    
-    avail, device = _cuda_avail()
-    
     ncores = 2
     batch_size = 2
     max_epochs = 2
@@ -118,21 +98,22 @@ if __name__ == '__main__':
     model_dir = 'models'
     model_prefix = 'prefix'
 
+    avail, device = _cuda_avail()
+
     test_table = pd.read_csv(test_csv)
     train_table = pd.read_csv(train_csv)
 
     target_scale = lambda x: 1.0 / (1.0 + np.exp((x-3.0) * 1.5)) * (1 + np.exp(-3*1.5))
-    test_set = dataset.MolDataset(test_table, root_dir, target_transform=target_scale, add_index=True)
-    train_set = dataset.MolDataset(train_table, root_dir, target_transform=target_scale)
+    test_set = dataset.MolDataset(test_table, root_dir, target_transform=target_scale, add_index=True, remove_grid=True)
+    train_set = dataset.MolDataset(train_table, root_dir, target_transform=target_scale, remove_grid=True)
     test_loader = DataLoader(dataset=test_set, batch_size=batch_size, num_workers=ncores, shuffle=False)
     train_loader = DataLoader(dataset=train_set, batch_size=batch_size, num_workers=ncores, shuffle=True, drop_last=False)
 
     input_shape = torch.tensor(train_set[0][0].shape).numpy()
     print("Grid shape")
     print(input_shape)
-    #model = ModelClass_Toy(input_shape)
     model = ModelClass_Probe(input_shape)
-    
+
     if avail:
         #device_ids = [0, 1, 2, 3, 4, 5, 6, 7]
         model = nn.DataParallel(model) #, device_ids=device_ids)
@@ -141,10 +122,10 @@ if __name__ == '__main__':
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     print(optimizer)
-    
+
     loss = torch.nn.MSELoss()
     print(loss)
-    
+
     trainer = regression_trainer_with_tagwise_statistics(model, 
                                                          optimizer, 
                                                          loss, 

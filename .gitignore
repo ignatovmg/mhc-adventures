@@ -1,7 +1,10 @@
 # Custom
 .ipynb_checkpoints/
-bin/
 test.ipynb
+Untitled.ipynb
+dist/
+build/
+ilovemhc.egg-info/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import glob
 import shutil
+import re
+import logging
+from itertools import product
 
 import Bio
 from Bio.SubsMat import MatrixInfo as matlist
@@ -28,6 +31,19 @@ contacting_set = [7, 9, 22, 24, 36, 45, 55, 58, 59, 62, 63, 65, 66, 67, 69,
 
 # pdb: 1ao7
 custom_ref_seq = 'GSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGYYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMAAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQR'
+
+pdb_slices = {'atomi' : slice(6,11),
+              'atomn' : slice(12,16),
+              'resn' : slice(17,20),
+              'chain' : slice(21,22),
+              'resi' : slice(22,26),
+              'x' : slice(30,38),
+              'y' : slice(38,46),
+              'z' : slice(46,54)}
+
+def global_align(s1, s2):
+    aln = Bio.pairwise2.align.globalds(s1, s2, matlist.blosum62, -14.0, -4.0)
+    return aln
 
 def __get_square_aln_matrix():
     blosum62 = matlist.blosum62
@@ -89,17 +105,40 @@ def get_pseudo_sequence_nielsen(seq):
 def get_pseudo_sequence_custom(seq):
     return get_pseudo_sequence(seq, custom_ref_seq, contacting_set)
 
-def split_models(path):
+def convert_allele_name(allele):
+    new = allele.split()
+    new = 'HLA-' + new[1] if new[0].startswith('HLA') else new[1]
+    m = re.match('(.+-[A-Z0-9]+\*[0-9]+:[0-9]+)', new)
+    if m:
+        return m.group(1)
+    return new
+
+
+def split_models(path, outdir, add_rec=None):
+    if add_rec:
+        with open(add_rec, 'r') as f:  
+            rec_lines = [x for x in f if x.startswith('ATOM') or x.startswith('HETATM')]
+            first_atom = int(rec_lines[-1][6:11]) + 1
+            rec_text = ''.join(rec_lines)
+    
     with open(path, 'r') as f:
         for line in f:
             if line.startswith('MODEL'):
-                    name = line.split()[1] + '.pdb'
-                    f = open(name, 'w')
-                    continue
+                name = os.path.join(outdir, line.split()[1] + '.pdb')
+                f = open(name, 'w')
+                if add_rec:
+                    counter = 0
+                    f.write(rec_text)
+                continue
             if line.startswith('END'):
-                    f.write('END\n')
-                    f.close()
-                    continue
+                f.write('END\n')
+                f.close()
+                continue
+            if add_rec and (line.startswith('ATOM') or line.startswith('HETATM')):
+                atom_id = first_atom + counter
+                line = line[:6] + '%5i' % atom_id + line[11:]
+                counter += 1
+                
             f.write(line)
             
 def hsd2his(path, out=None):
@@ -156,14 +195,34 @@ def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=Fals
             
     f.write('END\n')
     f.close()
+    
+def renumber_pdb(save_file, pdb):
+    atom_i = pdb_slices['atomi']
+    counter = 1
+    with open(pdb, 'r') as f, open(save_file, 'w') as o:
+        for line in f:
+            new_line = line
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+                new_line = line[:atom_i.start] + '%5i' % counter + line[atom_i.stop:]
+                counter += 1
+            o.write(new_line)
 
 def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE, change_his=True, remove_tmp=True):
-    tmp_file = pdb[:-4] + '-tmp.pdb' #tmp_file_name('.pdb')
+    pwd = os.getcwd()
+    
+    dirname = os.path.dirname(pdb)
+    if not dirname:
+        dirname = '.'
+        
+    basename = os.path.basename(pdb)
+    os.chdir(dirname)
+    
+    tmp_file = basename[:-4] + '-tmp.pdb' #tmp_file_name('.pdb')
     
     if change_his:
-        his2hsd(pdb, tmp_file)
+        his2hsd(basename, tmp_file)
     else:
-        shutil.copyfile(pdb, tmp_file)
+        shutil.copyfile(basename, tmp_file)
     
     call = [define.PDBPREP_EXE, tmp_file]
     shell_call(call)
@@ -175,8 +234,8 @@ def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE,
     psf = tmp_file[:-4] + '_nmin.psf'
     file_is_empty_error(nmin)
     
-    outnmin = out_prefix + '_nmin.pdb'
-    outpsf = out_prefix + '_nmin.psf'
+    outnmin = os.path.join(pwd, out_prefix + '_nmin.pdb')
+    outpsf = os.path.join(pwd, out_prefix + '_nmin.psf')
     os.rename(nmin, outnmin)
     os.rename(psf, outpsf)
     
@@ -185,7 +244,26 @@ def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE,
         call = ['rm', '-f'] + glob.glob(files) + [tmp_file]
         shell_call(call)
         
+    os.chdir(pwd)
     return outnmin, outpsf
+    
+def get_backbone_coords(pdb, nres):
+    names = ['N', 'C', 'CA', 'CB', 'O']
+
+    bb_coords = np.full(nres * len(names) * 3, np.nan)
+    dd = dict(zip(product(range(1, nres+1), names), 
+                  np.arange(0, bb_coords.shape[0], 3)))
+    
+    with open(pdb, 'r') as f:
+        lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
+        crds = {}
+        for line in lines:
+            key = (int(line[22:26]), line[12:16].strip())
+            if key[1] in names:
+                coords = [line[30:38], line[38:46], line[46:54]]
+                loc = dd[key]
+                bb_coords[loc:loc+3] = map(float, coords)
+    return bb_coords
     
 def peptide_calc_bb_rsmd(pdb1, pdb2):
     #print pdb1, pdb2
@@ -195,15 +273,15 @@ def peptide_calc_bb_rsmd(pdb1, pdb2):
             lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
             crds1 = {}
             for line in lines:
-                    coords = [line[30:38].strip(), line[38:46].strip(), line[46:54].strip()]
-                    crds1[(line[22:26], line[12:16])] = np.array(map(float, coords))
+                    coords = [line[30:38], line[38:46], line[46:54]]
+                    crds1[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
 
     with open(pdb2, 'r') as f:
             lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
             crds2 = {}
             for line in lines:
-                    coords = [line[30:38].strip(), line[38:46].strip(), line[46:54].strip()]
-                    crds2[(line[22:26], line[12:16])] = np.array(map(float, coords))
+                    coords = [line[30:38], line[38:46], line[46:54]]
+                    crds2[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
 
     n = 0
     rmsd = 0.0
@@ -215,7 +293,10 @@ def peptide_calc_bb_rsmd(pdb1, pdb2):
         if key[1] == 'CB':
             crd2 = crds2.get(key, nanar.copy())
         else:
-            crd2 = crds2[key]
+            try:
+                crd2 = crds2[key]
+            except KeyError as e:
+                logging.warning('Key Error (%s, %s): ' % (pdb1,pdb2) + str(e))
 
         if not np.isnan(crd2).any():
             rmsd += ((crd1 - crd2)**2).sum()
@@ -244,6 +325,7 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
 
     lines = []
     id = 1
+    result = []
     with open(models, 'r') as f:
         for line in f.readlines():
             if line.startswith('MODEL'):
@@ -278,20 +360,22 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                     sys.stderr.write('Model %s Error: n = 0\n' % id)
                     continue #sys.exit(1)
                 rmsd = np.sqrt(rmsd/n)
-                print('%s %.3f' % (id, rmsd))
+                #print('%s %.3f' % (id, rmsd))
+                result.append((id, rmsd))
                 lines = []
-                
-def conv3d_output_shape(h_w_d, kernel_size=1, stride=1, pad=0, dilation=1, ceil_flag=False):
-    """
-    Utility function for computing output of convolutions
-    takes a tuple of (h,w) and returns a tuple of (h,w)
-    """
-    from math import floor, ceil
-    if type(kernel_size) is not tuple:
-        kernel_size = (kernel_size, kernel_size, kernel_size)
-        
-    rnd = ceil if ceil_flag else floor
-    h = rnd(((h_w_d[0] + (2 * pad) - ( dilation * (kernel_size[0] - 1) ) - 1 )/ stride) + 1)
-    w = rnd(((h_w_d[1] + (2 * pad) - ( dilation * (kernel_size[1] - 1) ) - 1 )/ stride) + 1)
-    d = rnd(((h_w_d[2] + (2 * pad) - ( dilation * (kernel_size[2] - 1) ) - 1 )/ stride) + 1)
-    return h, w, d
+    return result
+
+def compute_generic_distance_matrix(plist, dfunc):
+    dmat = np.zeros((len(plist), len(plist)))
+    for i in range(len(plist)):
+        for j in range(i, len(plist)):
+            val = dfunc(plist[i], plist[j])
+            dmat[i, j] = val
+            dmat[j, i] = val
+    return dmat
+
+def compute_backbone_distance_matrix(plist):
+    return compute_generic_distance_matrix(plist, peptide_calc_bb_rsmd)
+
+def compute_sequence_matrix(seq_list):
+    return compute_generic_distance_matrix(seq_list, seq_dist)
