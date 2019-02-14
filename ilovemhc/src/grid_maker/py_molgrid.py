@@ -13,6 +13,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <vector>
 
 #define E 2.71828
 
@@ -49,13 +50,15 @@ static int get_element_index(char* channels, char val) {
     return -1;
 }
 
-static float* compute_grid(const char* pdb_file, 
-                    const char* type2properties_file, 
-                    const char* name2type_file, 
-                    float bin, int nch, long int* dims) {
+//static std::vector<float> 
+float*
+compute_grid(const char* pdb_file, 
+            const char* type2properties_file, 
+            const char* name2type_file, 
+            float bin, int nch, long int* dims) {
     
     char err[500];
-    std::map<std::string, float*> t2p; 
+    std::map<std::string, std::vector<float>> t2p; 
     std::map<std::string, std::string> n2t;
    
     std::string linebuf;
@@ -74,15 +77,13 @@ static float* compute_grid(const char* pdb_file,
         //std::array<float, NCH> ar;
         std::string atom_type;
         while(infile >> id >> atom_type) {
-            float* ar = new float[nch];
+            t2p[atom_type].resize(nch);
             for (int i = 0; i < nch; i++) {
-                infile >> ar[i];
+                infile >> t2p[atom_type][i];
             }
-            t2p[atom_type] = ar;
         }
         infile.close();
     } catch (int e) {
-        //PyErr_SetString(MolgridError, "Exception occured, while reading type2properties_file");
         MSG_ERR("Exception occured, while reading %s", type2properties_file);
         return NULL;
     }
@@ -120,23 +121,15 @@ static float* compute_grid(const char* pdb_file,
     lower[0] = floor(lower[0] - padding);
     lower[1] = floor(lower[1] - padding);
     lower[2] = floor(lower[2] - padding);
-    
-    //MSG_INFO("Input PDB %s\n", pdb_file);
-    //MSG_INFO("Lower bound: (%.3f, %.3f, %.3f)\n", lower[0], lower[1], lower[2]);
-    //MSG_INFO("Upper bound: (%.3f, %.3f, %.3f)\n", upper[0], upper[1], upper[2]);
 
     // tabulate pseudo-gauss function
-    // taken from here 10.1021/acs.jcim.6b00740
-    float* gauss_tab[NELE];
+    // taken from 10.1021/acs.jcim.6b00740
+    std::vector<std::vector<float>> gauss_tab(NELE);
+    
     float  stride_tab = 0.1;
     for (int c = 0; c < NELE; c++) {
         int nvals = (int)ceil(vdw_radii[c] * rad_mult / stride_tab) + 1;
-        gauss_tab[c] = (float*)calloc(nvals, sizeof(float));
-        
-        if (gauss_tab[c] == NULL) {
-            MSG_ERR("Variable 'gauss_tab[%i]' couldn't be allocated", c);
-            return NULL;
-        }
+        gauss_tab[c].resize(nvals);
         
         float d, r = vdw_radii[c];
         
@@ -146,11 +139,6 @@ static float* compute_grid(const char* pdb_file,
         }
     }
     
-    //dims = {(long int)nch*2, // number of channels
-    //                (long int)ceil((upper[0]-lower[0]) / bin) + 1, // dimensions of spacial
-    //                (long int)ceil((upper[1]-lower[1]) / bin) + 1, // part of cnn input
-    //                (long int)ceil((upper[2]-lower[2]) / bin) + 1};
-    
     dims[0] = (long int)nch*2;
     dims[1] = (long int)ceil((upper[0]-lower[0]) / bin) + 1;
     dims[2] = (long int)ceil((upper[1]-lower[1]) / bin) + 1;
@@ -158,18 +146,13 @@ static float* compute_grid(const char* pdb_file,
 
     float xyz[3]; // atomic coordinates
     long total_size = dims[0]*dims[1]*dims[2]*dims[3];
-    float* array = (float*)calloc(total_size, sizeof(float)); // cnn input
-    
-    if (array == NULL) {
-        MSG_ERR("Variable 'array' couldn't be allocated");
-        return NULL;
-    }
+    //std::vector<float> array(total_size, 0); // cnn input
+    float* array = (float*)calloc(total_size, sizeof(float));
     
     std::string line;
     infile.open(pdb_file);
     
     if (!infile) {
-        MYFREE(array);
         MSG_ERR("File %s couldn't be opened", pdb_file);
         return NULL;
     }
@@ -183,19 +166,17 @@ static float* compute_grid(const char* pdb_file,
             int ele_id  = get_element_index(elements, ele);
             
             if (ele_id == -1) {
-                MYFREE(array);
                 MSG_ERR("Couldn't find element '%c' in table", ele);
                 return NULL;
             }
             
             std::string atomname = line.substr(12, 8);
             std::string typen;
-            float* ppts;
+            std::vector<float> ppts;
             //std::cout << atomname << " ";
             try {
                 typen = n2t.at(atomname);
             } catch (std::out_of_range e) {
-                MYFREE(array);
                 MSG_ERR("Atom name '%s' not found in the name table", atomname.c_str());
                 return NULL;
             }
@@ -203,22 +184,16 @@ static float* compute_grid(const char* pdb_file,
             try {
                 ppts = t2p.at(typen);
             } catch (std::out_of_range e) {
-                MYFREE(array);
                 MSG_ERR("Atom type '%s' not found in the property table", typen.c_str());
                 return NULL;
             }
-            //for (auto rr : ppts) {
-            //    std::cout << rr << " ";
-            //}
-            //std::cout << std::endl;
 
             xyz[0] = std::stof(line.substr(30, 8));
             xyz[1] = std::stof(line.substr(38, 8));
             xyz[2] = std::stof(line.substr(46, 8));
-            //std::cout << xyz[0] << " " << xyz[1] << " " << xyz[2] << std::endl;
-
-            float* gauss = gauss_tab[ele_id];
-            float    rad = vdw_radii[ele_id];
+            
+            auto gauss = gauss_tab[ele_id];
+            float rad = vdw_radii[ele_id];
             int lcell[3], ucell[3];
             float pos[3];
             float max_dist = rad * rad_mult;
@@ -242,7 +217,6 @@ static float* compute_grid(const char* pdb_file,
                 } else if (chain == 'B') {
                     channel = c + nch;
                 } else {
-                    MYFREE(array);
                     MSG_ERR("Chain must be either A (receptor) or B (ligand). Chain '%c' provided instead", chain);
                     return NULL;
                 }
@@ -269,13 +243,8 @@ static float* compute_grid(const char* pdb_file,
         }
     }    
     
-    for (int i = 0; i < NELE; i++) {
-        MYFREE(gauss_tab[i]);
-    }
-    
     return array;
 }
-
 
 static PyObject* make_grid(PyObject *self, PyObject *args)
 {
@@ -305,7 +274,8 @@ static PyObject* make_grid(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    return output;
+    PyArray_ENABLEFLAGS((PyArrayObject*)output, NPY_ARRAY_OWNDATA);
+    return Py_BuildValue("(N)", output);
 }
 
 static PyMethodDef MolgridMethods[] = {

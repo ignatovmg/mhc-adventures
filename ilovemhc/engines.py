@@ -25,21 +25,27 @@ import torch.optim
 from sklearn import metrics
 import scipy.stats as stats
 
-def cuda_is_avail(gpu_default="cuda:0"):
+def cuda_is_avail():
     logging.info("Checking CUDA availability ...")
     avail = torch.cuda.is_available()
     logging.info("CUDA is available yay" if avail else "CUDA is not available :-(")
+    return avail
 
+def get_device(device_name):
+    avail = cuda_is_avail()
+    
     if avail:
         ngpu = torch.cuda.device_count()
-        logging.info('Let\'s use %i GPUs' % ngpu)
-        device = torch.device(gpu_default)
+        logging.info('There are %i GPUs in total' % ngpu)
+        device = torch.device(device_name)
     else:
         ngpu = None
         device = torch.device("cpu")
+        
     logging.info('Using ' + str(device))
     
     return avail, device
+    
 
 def _my_create_evaluator(model, 
                          metrics={}, 
@@ -84,6 +90,7 @@ def _my_create_supervised_trainer(model, optimizer, loss_fn,
         loss = loss_fn(y_pred, y)
         loss.backward()
         optimizer.step()
+        #logging.info(y_pred.shape)
         return {'loss': loss.item(), 'prediction': y_pred, 'target': y}
 
     return Engine(_update)
@@ -203,6 +210,7 @@ def regression_evaluator_with_tagwise_statistics(model, loss, test_table, device
 
 def regression_trainer_with_tagwise_statistics(model, optim, loss, test_loader, test_table, device, model_dir='models', model_prefix='model', every_n_iter=100):
     # set up trainer
+    logging.info('Creating trainer..')
     trainer = _my_create_supervised_trainer(model, optim, loss, device=device)
     
     # keep all the models
@@ -216,6 +224,7 @@ def regression_trainer_with_tagwise_statistics(model, optim, loss, test_loader, 
     trainer.add_event_handler(Events.EPOCH_COMPLETED, handler, {'model': model})
 
     stats_prefix = os.path.join(model_dir, model_prefix)
+    logging.debug('Creating evaluator..')
     evaluator = regression_evaluator_with_tagwise_statistics(model, loss, test_table, device, stats_prefix)
 
     # set up timers

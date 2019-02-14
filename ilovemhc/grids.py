@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import logging
 
+from itertools import product
+
 import utils
 import define
 import molgrid
@@ -73,7 +75,7 @@ class GridMaker():
             coords = np.array(coords)
             #print coords.shape
 
-            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='r')
+            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='r', depthshade=True, alpha=0.5)
 
             slic = grid[channel, :, : ,:]
 
@@ -92,7 +94,7 @@ class GridMaker():
 
             #fig = plt.figure(figsize=(10,10))
             #ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='b')
+            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='b', depthshade=True, alpha=0.5)
             ax.view_init(60, angle)
             
             filename=("%03i" % counter) +'.png'
@@ -101,18 +103,63 @@ class GridMaker():
             counter += 1
             
         call = 'convert -delay 30 ' + ' '.join(png_files) + ' a.gif && mv a.gif a.gif.png'
-        shell_call(call.split())
+        shell_call(call, shell=True)
         
         call = 'rm -f ' + ' '.join(png_files)
-        shell_call(call.split())
-        
-        return status
+        shell_call(call, shell=True)
     
     def create_gif_from_file(self, grid_file, channel=5, thre=0.1):
         dim, grid = self.read_grid(grid_file)
         grid = grid.reshape(dim)
         create_gif(self, grid, channel=5, thre=0.1)
+        
+    def grid_to_pdb(self, save_pdb, grid, bin_size, ch=0):
+        origin = np.array([7.473, 4.334, 7.701]) - 5.0;
+        
+        ch_per_mol = grid.shape[0] / 2
+        
+        if (ch > ch_per_mol):
+            throw_error(ValueError, 'Channel id must be less, than %i' % ch_per_mol)
+            
+        spacial_rec = grid[ch]
+        spacial_lig = grid[ch+ch_per_mol]
+        dims = spacial_rec.shape
+        coords = product(*[range(x) for x in dims])
+        
+        max_lig = spacial_lig.max()
+        levels = [max_lig / 2**i for i in range(1, 5)]
+        logging.info(levels)
+        
+        def ele_map(val):
+            if val > levels[0]:
+                ele = ' F'
+            elif val > levels[1]:
+                ele = ' O'
+            elif val > levels[2]:
+                ele = ' N'
+            elif val > levels[3]:
+                ele = ' S'
+            else:
+                ele = ' C'
+            return ele
 
+        with open(save_pdb, 'w') as f:
+            for crd in coords:
+                xyz = (np.array(crd) / bin_size) + origin
+                
+                if spacial_rec[crd] > 0.0:
+                    ele = ele_map(spacial_rec[crd])
+                    
+                    line = 'ATOM      1  C   *** A   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
+                        (xyz[0], xyz[1], xyz[2], ele)
+                    f.write(line)
+                    
+                if spacial_lig[crd] > 0.0:
+                    ele = ele_map(spacial_lig[crd])
+                    line = 'ATOM      1  C   *** B   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
+                        (xyz[0], xyz[1], xyz[2], ele)
+                    f.write(line)
+                
     def draw_grid_in_jupyter_notebook(self, grid, channel, thre):
         from IPython.display import Image
         
@@ -120,10 +167,10 @@ class GridMaker():
             return Image(filename="a.gif.png")
         return 1
     
-    # this one is a direct binding of C++ code, so its better to use this one
-    def make_grid(self, inputpdb, binsize, remove_tmp=True, hsd2his=True):
+    # this one uses direct binding of C++ code, so better to use this one
+    def make_grid(self, inputpdb, binsize, remove_tmp=True, hsd2his=False):
         if hsd2his:
-            tmp_file = inputpdb + '.tmp'
+            tmp_file = inputpdb + '.tmp.' + str(os.getpid())
             utils.hsd2his(inputpdb, tmp_file)
         else:
             tmp_file = inputpdb
@@ -135,9 +182,9 @@ class GridMaker():
             
         return grid
     
-    def make_grid_file(self, savepath, inputpdb, binsize, remove_tmp=True, hsd2his=True):
+    def make_grid_file(self, savepath, inputpdb, binsize, remove_tmp=True, hsd2his=False):
         if hsd2his:
-            tmp_file = inputpdb + '.tmp'
+            tmp_file = inputpdb + '.tmp.' + str(os.getpid())
             utils.hsd2his(inputpdb, tmp_file)
         else:
             tmp_file = inputpdb

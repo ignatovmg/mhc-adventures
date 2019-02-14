@@ -2,8 +2,10 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import torch.optim
+
 from collections import OrderedDict
 import logging
+import numpy as np
 
 def conv3d_shape(h_w_d, kernel_size=1, stride=1, padding=0, dilation=1, ceil_flag=False):
     """
@@ -83,17 +85,30 @@ class Model1(nn.Module):
              nn.MaxPool3d(2),
              nn.Dropout3d()])
         
-        conv_shape = _output_shape(self.input_shape[1:], self.conv)
+        #conv_shape = _output_shape(self.input_shape[1:], self.conv)
+        conv_shape = self._infer_shape()
         
         self.fc = nn.ModuleList(
-            [nn.Linear(256 * int(conv_shape.prod()), 1024), 
+            [nn.Linear(int(conv_shape.prod()), 1024), 
              nn.ReLU(),
              nn.Dropout3d(),
-
+             
              nn.Linear(1024, 1)])
         
         map(_init_fun, self.conv)
         map(_init_fun, self.fc)
+        
+    def _infer_shape(self):
+        x = torch.randn(tuple([1] + map(int, self.input_shape)))
+        logging.info('Inferring shape for convolutional part...')
+        logging.info(x.shape)
+        
+        for l in self.conv:
+            x = l(x);
+            logging.info("==== " + str(l) + " ====")
+            logging.info(x.shape)
+        
+        return torch.tensor(x.shape)
     
     def forward(self, x):
         for l in self.conv:
@@ -525,6 +540,62 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
         
+        x = torch.sigmoid(x)
+        return x
+    
+# old model    
+class ModelClass_Probe(nn.Module):
+    def __init__(self, input_shape):
+        super(ModelClass_Probe, self).__init__()
+        
+        mean = 0.0
+        std = 0.001
+        init_fun = lambda x: nn.init.normal_(x.weight, mean, std)
+        
+        self.input_shape = input_shape
+        self.batchnorm = nn.BatchNorm3d(self.input_shape[0])
+        self.dropout = nn.Dropout3d()
+        
+        self.conv11 = nn.Conv3d(self.input_shape[0], 64, 3, padding=1)
+        init_fun(self.conv11)
+        
+        self.conv21 = nn.Conv3d(64, 128, 3, padding=1)
+        init_fun(self.conv21)
+        
+        self.conv31 = nn.Conv3d(128, 256, 3, padding=1)
+        init_fun(self.conv31)
+        
+        self.fc1 = nn.Linear(256 * 5 * 3 * 3, 1024)
+        init_fun(self.fc1)
+        
+        self.fc2 = nn.Linear(1024, 512)
+        init_fun(self.fc2)
+
+        self.fc3 = nn.Linear(512, 1)
+        init_fun(self.fc3)
+        
+    def forward(self, x):
+        x = self.batchnorm(x)
+        x = F.relu(self.conv11(x))
+        x = F.max_pool3d(x, 2, ceil_mode=True)
+        x = self.dropout(x)
+        
+        x = F.relu(self.conv21(x))
+        x = F.max_pool3d(x, 2, ceil_mode=True)
+        x = self.dropout(x)
+
+        x = F.relu(self.conv31(x))
+        x = F.max_pool3d(x, 2, ceil_mode=True)
+        x = self.dropout(x)
+        
+        x = x.view(-1, 256 * 5 * 3 * 3)
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+
+        x = F.relu(self.fc2(x))
+        x = self.dropout(x)
+
+        x = self.fc3(x)
         x = torch.sigmoid(x)
         return x
         

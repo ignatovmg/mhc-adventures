@@ -23,10 +23,11 @@ def file_absent_error(path):
     if not file_exists(path):
         throw_error(OSError, 'File %s doesn\'t exist' % path)
         
-def shell_call(call):
+def shell_call(call, shell=False):
+    output = None
     try:
         logging.debug('Command executed:' + ' '.join(call))
-        output = subprocess.check_output(call, stderr=subprocess.STDOUT)
+        output = subprocess.check_output(call, shell=shell, stderr=subprocess.STDOUT)
         logging.debug(output)
     except subprocess.CalledProcessError as e:
         logging.exception('Exception caught')

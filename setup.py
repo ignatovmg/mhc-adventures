@@ -1,7 +1,7 @@
 from setuptools import setup, Extension
 import numpy as np
 
-cpp_ext = Extension('ilovemhc.molgrid', sources = ['ilovemhc/src/grid_maker/test.cpp'], include_dirs=[np.get_include()])
+cpp_ext = Extension('ilovemhc.molgrid', sources = ['ilovemhc/src/grid_maker/py_molgrid.cpp'], include_dirs=[np.get_include()])
 
 setup(name='ilovemhc',
       version='0.1',

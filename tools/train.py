@@ -13,16 +13,12 @@ import torch.optim
 import click
 import logging
 
-#libpath = '/gpfs/projects/KozakovGroup/mhc_learning/mhc-adventures/ilovemhc'
-#if libpath not in sys.path:
-#    sys.path.append(libpath)
-
 import ilovemhc
 from ilovemhc.wrappers import *
 from ilovemhc import utils
 from ilovemhc import grids
 from ilovemhc import dataset
-from ilovemhc.engines import regression_trainer_with_tagwise_statistics, cuda_is_avail
+from ilovemhc.engines import regression_trainer_with_tagwise_statistics, get_device
 
 @click.command()
 @click.argument('model_dir')
@@ -32,8 +28,10 @@ from ilovemhc.engines import regression_trainer_with_tagwise_statistics, cuda_is
 @click.option('-b', '--batch_size', default=128)
 @click.option('-e', '--max_epochs', default=10)
 @click.option('-c', '--ncores', default=1, help='N cores to use for data loading')
-@click.option('-d', '--cuda_device', default="cuda:0", help='Cuda device id: e.g. "cuda:0"')
+@click.option('-d', '--device_name', default="cuda:0", help='Device id in torch format: e.g. "cuda:0" or "cpu"')
 @click.option('--bin_size', default=1.0, help='Grid resolution')
+@click.option('--ngpu', default=1, help='Number of GPUs to use')
+
 def run(model_dir,
         model_name, 
         weight_decay, 
@@ -41,8 +39,9 @@ def run(model_dir,
         batch_size, 
         max_epochs,  
         ncores,
-        cuda_device,
-        bin_size):
+        device_name,
+        bin_size, 
+        ngpu):
     
     exec 'from ilovemhc.torch_models import %s as current_model_class' % model_name in globals(), locals()
     
@@ -53,16 +52,24 @@ def run(model_dir,
     logging.info('batch_size    = {}'.format(batch_size))
     logging.info('max_epochs    = {}'.format(max_epochs))
     logging.info('ncores        = {}'.format(ncores))
-    logging.info('cuda_device   = {}'.format(cuda_device))
+    logging.info('device_name   = {}'.format(device_name))
     logging.info('bin_size      = {}'.format(bin_size))
+    logging.info('ngpu          = {}'.format(ngpu))
     
     train_csv = '../dataset/train_test/train-full-vsplit.csv'
     test_csv = '../dataset/train_test/test-full-vsplit.csv'
+    #train_csv = '../dataset/train_test/train-toy.csv'
+    #test_csv = '../dataset/train_test/test-toy.csv'
     root_dir = '../dataset'
     model_prefix = 'model'
 
-    avail, device = cuda_is_avail(cuda_device)
+    logging.info('Getting device..')
+    avail, device = get_device(device_name)
 
+    if not avail:
+        raise RuntimeError('CUDA is not available')
+
+    logging.info('Reading tables..')
     test_table = pd.read_csv(test_csv)
     train_table = pd.read_csv(train_csv)
 
@@ -73,6 +80,7 @@ def run(model_dir,
     c2 = (1.-buf)/(2.-buf)
     target_scale = lambda x: c2 / (1. + np.exp((x - c1)*steepness))
     
+    logging.info('Creating test dataset..')
     test_set = dataset.MolDataset(test_table, 
                                   root_dir, 
                                   bin_size=bin_size,
@@ -80,34 +88,47 @@ def run(model_dir,
                                   add_index=True, 
                                   remove_grid=True)
     
+    logging.info('Creating train dataset..')
     train_set = dataset.MolDataset(train_table, 
                                    root_dir, 
                                    bin_size=bin_size,
                                    target_transform=target_scale, 
                                    remove_grid=True)
     
+    logging.info('Creating test loader..')
     test_loader = DataLoader(dataset=test_set, 
                              batch_size=batch_size, 
                              num_workers=ncores, 
                              shuffle=False)
     
-    train_loader = DataLoader(dataset=train_set, batch_size=batch_size, num_workers=ncores, shuffle=True)
+    logging.info('Creating train loader..')
+    train_loader = DataLoader(dataset=train_set, batch_size=batch_size, num_workers=ncores, shuffle=False)
 
+    logging.info('Getting input shape..')
     input_shape = torch.tensor(train_set[0][0].shape).numpy()
     logging.info(input_shape)
     
+    logging.info('Initializing model..')
     model = current_model_class(input_shape)
     logging.info(model)
     
-    #if avail:
-    #    model = nn.DataParallel(model)
+    if avail and ngpu > 1:
+        ngpu_total = torch.cuda.device_count()
+        if ngpu_total < ngpu:
+            #raise ValueError('Number of GPUs specified is too large: %i > %i' % (ngpu, ngpu_total))
+            logging.warning('Number of GPUs specified is too large: %i > %i. Using all GPUs' % (ngpu, ngpu_total))
+            ngpu = ngpu_total
+        logging.info('Using DataParallel on %i GPUs' % ngpu)
+        model = nn.DataParallel(model, device_ids=list(range(ngpu)))
 
+    logging.info('Creating optimizer..')
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     logging.info(optimizer)
 
     loss = torch.nn.MSELoss()
     logging.info(loss)
 
+    logging.info('Creating trainer..')
     trainer = regression_trainer_with_tagwise_statistics(model, 
                                                          optimizer, 
                                                          loss, 
@@ -117,6 +138,8 @@ def run(model_dir,
                                                          model_dir, 
                                                          model_prefix,
                                                          every_n_iter=10)
+    
+    logging.info('Starting trainer..')
     trainer.run(train_loader, max_epochs)
     logging.info("COMPLETED")
     
