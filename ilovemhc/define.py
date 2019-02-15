@@ -2,19 +2,23 @@ import os
 
 # directories
 PACKAGE_ROOT = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.join(PACKAGE_ROOT, 'src')
-BIN_DIR = os.path.join(PACKAGE_ROOT, 'bin')
+SRC_DIR = os.path.join(PACKAGE_ROOT, 'source')
+BIN_DIR = os.path.join(PACKAGE_ROOT, 'executables')
 
-MOL_PRM_DIR = os.path.join(SRC_DIR, 'prepare_pdb/mol-prms')
-PDB_PREP_DIR = os.path.join(SRC_DIR, 'prepare_pdb/pdbprep')
-GRID_DIR = os.path.join(SRC_DIR, 'grid_maker')
+MOL_PRM_DIR = os.path.join(PACKAGE_ROOT, 'mol-prms')
+#MOL_PRM_DIR = os.path.join(SRC_DIR, 'prepare_pdb/mol-prms')
+PDB_PREP_DIR = os.path.join(BIN_DIR, 'pdb_prep')
+#PDB_PREP_DIR = os.path.join(SRC_DIR, 'prepare_pdb/pdbprep')
+#GRID_DIR = os.path.join(BIN_DIR, '')
+#GRID_DIR = os.path.join(SRC_DIR, 'grid_maker')
+GRID_PRM_DIR = os.path.join(PACKAGE_ROOT, 'grid-prms')
 TEST_DIR = os.path.join(PACKAGE_ROOT, 'data/test_data')
 
 # parameters
 RTF22_FILE = os.path.join(MOL_PRM_DIR, 'top_all22_prot.rtf')
 PRM22_FILE = os.path.join(MOL_PRM_DIR, 'par_all22_prot.prm')
-ATOM_PROPERTY22_FILE = os.path.join(GRID_DIR, 'props.csv')
-ATOM_TYPES22_FILE = os.path.join(GRID_DIR, 'types.csv')
+ATOM_PROPERTY22_FILE = os.path.join(GRID_PRM_DIR, 'props.csv')
+ATOM_TYPES22_FILE = os.path.join(GRID_PRM_DIR, 'types.csv')
 
 ATOM_PROPERTY_DEFAULT = ATOM_PROPERTY22_FILE
 ATOM_TYPES_DEFAULT = ATOM_TYPES22_FILE

@@ -97,10 +97,10 @@ class MolDataset(Dataset):
                 full_path = self.pdb_transform(full_path)
 
                 
-            grid_path = os.path.basename(full_path) + '.' + str(os.getpid()) + '.bin'
-            self.grid_maker.make_grid_file(grid_path, full_path, self.bin_size)
+            #grid_path = os.path.basename(full_path) + '.' + str(os.getpid()) + '.bin'
+            #self.grid_maker.make_grid_file(grid_path, full_path, self.bin_size)
             
-            #grid = self.grid_maker.make_grid(full_path, self.bin_size)
+            grid = self.grid_maker.make_grid(full_path, self.bin_size)
         else:
             grid_path = full_path
             

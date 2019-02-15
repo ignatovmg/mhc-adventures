@@ -39,9 +39,17 @@ def load_model(model, saved_model_path, cpu=True, strip_keys=False):
         model_state_dict = torch.load(saved_model_path, map_location='cpu')
     else:
         model_state_dict = torch.load(saved_model_path)
+    print model_state_dict.__dict__
         
     if strip_keys:
-        model_state_dict = OrderedDict([(x[0][7:], x[1]) for x in model_state_dict.iteritems()])
+        new_dict = []
+        for key, val in model_state_dict.iteritems():
+            if key.startswith('module.'):
+                new_dict.append(key[7:], val)
+            else:
+                new_dict.append(key, val)
+        model_state_dict = OrderedDict(new_dict)
+        
     model.load_state_dict(model_state_dict)
     return model
 

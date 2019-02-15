@@ -19,6 +19,7 @@ from ilovemhc import utils
 from ilovemhc import grids
 from ilovemhc import dataset
 from ilovemhc.engines import regression_trainer_with_tagwise_statistics, get_device
+from ilovemhc.torch_models import load_model
 
 @click.command()
 @click.argument('model_dir')
@@ -31,6 +32,7 @@ from ilovemhc.engines import regression_trainer_with_tagwise_statistics, get_dev
 @click.option('-d', '--device_name', default="cuda:0", help='Device id in torch format: e.g. "cuda:0" or "cpu"')
 @click.option('--bin_size', default=1.0, help='Grid resolution')
 @click.option('--ngpu', default=1, help='Number of GPUs to use')
+@click.option('--use_saved', default='', help='Path to saved model')
 
 def run(model_dir,
         model_name, 
@@ -40,8 +42,9 @@ def run(model_dir,
         max_epochs,  
         ncores,
         device_name,
-        bin_size, 
-        ngpu):
+        bin_size,
+        ngpu,
+        use_saved):
     
     exec 'from ilovemhc.torch_models import %s as current_model_class' % model_name in globals(), locals()
     
@@ -55,6 +58,7 @@ def run(model_dir,
     logging.info('device_name   = {}'.format(device_name))
     logging.info('bin_size      = {}'.format(bin_size))
     logging.info('ngpu          = {}'.format(ngpu))
+    logging.info('use_saved     = {}'.format(use_saved))
     
     train_csv = '../dataset/train_test/train-full-vsplit.csv'
     test_csv = '../dataset/train_test/test-full-vsplit.csv'
@@ -108,19 +112,32 @@ def run(model_dir,
     input_shape = torch.tensor(train_set[0][0].shape).numpy()
     logging.info(input_shape)
     
-    logging.info('Initializing model..')
-    model = current_model_class(input_shape)
+    #logging.info('Initializing model..')
+    #model = current_model_class(input_shape)
+    #logging.info(model)
+    
+    if use_saved:
+        logging.info('Loading model from %s..' % use_saved)
+        #load_model(model, use_saved, cpu=True, strip_keys=True)
+        model = torch.load(use_saved)
+    else:
+        logging.info('Initializing model..')
+        model = current_model_class(input_shape)
+        
     logging.info(model)
     
+    using_data_parallel = False
     if avail and ngpu > 1:
         ngpu_total = torch.cuda.device_count()
         if ngpu_total < ngpu:
             #raise ValueError('Number of GPUs specified is too large: %i > %i' % (ngpu, ngpu_total))
             logging.warning('Number of GPUs specified is too large: %i > %i. Using all GPUs' % (ngpu, ngpu_total))
             ngpu = ngpu_total
-        logging.info('Using DataParallel on %i GPUs' % ngpu)
-        model = nn.DataParallel(model, device_ids=list(range(ngpu)))
-
+        if ngpu > 1:
+            logging.info('Using DataParallel on %i GPUs' % ngpu)
+            model = nn.DataParallel(model, device_ids=list(range(ngpu)))
+            using_data_parallel = True
+        
     logging.info('Creating optimizer..')
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     logging.info(optimizer)

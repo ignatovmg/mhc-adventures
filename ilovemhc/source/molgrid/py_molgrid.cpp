@@ -275,7 +275,7 @@ static PyObject* make_grid(PyObject *self, PyObject *args)
     }
     
     PyArray_ENABLEFLAGS((PyArrayObject*)output, NPY_ARRAY_OWNDATA);
-    return Py_BuildValue("(N)", output);
+    return output; //Py_BuildValue("(N)", output);
 }
 
 static PyMethodDef MolgridMethods[] = {
