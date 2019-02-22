@@ -37,6 +37,8 @@ class TemplateModeller():
     def _get_pep_path(self, pdb):
         return self.pdb_path + '/' + pdb + '_pep_fix_ph.pdb'
         
+    # the choice of coefficient in scoring for template picking was
+    # studied and 0.2 came out the best
     def pick_template(self, mhcseq, pepseq, coef=0.2):
         table = self.pdb_table[self.pdb_table.pep_len == len(pepseq)]
         

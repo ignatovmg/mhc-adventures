@@ -12,11 +12,20 @@ import utils
 import grids
 import molgrid
 
+def scale_func(break_point = 1.2, steepness = 3.):
+    buf = np.exp(steepness*break_point)
+    c1 = 1./steepness*np.log(buf-2.)
+    c2 = (1.-buf)/(2.-buf)
+    target_scale = lambda x: c2 / (1. + np.exp((x - c1)*steepness))
+    return target_scale
+
 class MolDataset(Dataset):
     """Mol dataset."""
 
-    def __init__(self, csv_table, 
+    def __init__(self, csv_table,
                  root_dir='.', 
+                 target_col='target',
+                 path_col='path',
                  input_is_pdb=True,
                  grid_maker=None, 
                  bin_size=1.0,
@@ -27,7 +36,7 @@ class MolDataset(Dataset):
                  remove_grid=False):
         """
         Args:
-            csv_table (pandas.DataFrame): Must contain columns 'path' and 'target'
+            csv_table (pandas.DataFrame): Must contain columns specified in target_col and path_col
             root_dir (string, optional): Directory with all the samples (default: '.')
             input_is_pdb (bool, optional): Indicates that data  samples are in pdb format (default: True).
             grid_maker (class GridMaker, optional): Custom GridMaker (default: None)
@@ -36,15 +45,15 @@ class MolDataset(Dataset):
             pdb_transform (callable, optional): Optional transform to be applied on a sample. Returns path to new pdb. (default: None). 
             target_transform (callable, optional): Optional transform to be applied on a sample. Returns single float (default: None). 
         """
-        if 'path' not in csv_table.columns:
-            raise ValueError('Table must contain column "path"')
+        if path_col not in csv_table.columns:
+            raise ValueError('Table must contain column "%s"' % path_col)
             
-        if 'target' not in csv_table.columns:
-            raise ValueError('Table must contain column "target"')
+        if target_col not in csv_table.columns:
+            raise ValueError('Table must contain column "%s"' % target_col)
         
         self.csv = csv_table
-        self.target_list = np.array(self.csv['target'], dtype=float)
-        self.path_list = np.array(self.csv['path'])
+        self.target_list = np.array(self.csv[target_col], dtype=float)
+        self.path_list = np.array(self.csv[path_col])
         self.root_dir = root_dir
         self.grid_transform = grid_transform
         self.pdb_transform = pdb_transform
@@ -99,8 +108,13 @@ class MolDataset(Dataset):
                 
             #grid_path = os.path.basename(full_path) + '.' + str(os.getpid()) + '.bin'
             #self.grid_maker.make_grid_file(grid_path, full_path, self.bin_size)
-            
-            grid = self.grid_maker.make_grid(full_path, self.bin_size)
+            try:
+                grid = self.grid_maker.make_grid(full_path, self.bin_size)
+            except Exception as e: # TODO: get of this
+                #logging.error('Failed creating grid for %s' % full_path)
+                #logging.exception(e)
+                #grid = self.grid_maker.make_grid('structures/1ddh_RGPGRAFVTI/min/split_min/00001790.pdb', self.bin_size)
+                raise RuntimeError('Failed creating grid for %s' % full_path)
         else:
             grid_path = full_path
             
@@ -122,9 +136,9 @@ class MolDataset(Dataset):
         if self.target_transform:
             target = self.target_transform(target)
         
-        if self.add_index:
-            sample = (grid.type(torch.FloatTensor), np.float32(target), np.long(idx))
-        else:
-            sample = (grid.type(torch.FloatTensor), np.float32(target))
+        #if self.add_index:
+        sample = (grid.type(torch.FloatTensor), np.float32(target), np.long(idx))
+        #else:
+        #    sample = (grid.type(torch.FloatTensor), np.float32(target))
 
         return sample

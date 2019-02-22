@@ -217,7 +217,7 @@ def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE,
     basename = os.path.basename(pdb)
     os.chdir(dirname)
     
-    tmp_file = basename[:-4] + '-tmp.pdb' #tmp_file_name('.pdb')
+    tmp_file = (basename[:-4] + '-tmp.pdb').lower() #tmp_file_name('.pdb')
     
     if change_his:
         his2hsd(basename, tmp_file)
@@ -265,38 +265,46 @@ def get_backbone_coords(pdb, nres):
                 bb_coords[loc:loc+3] = map(float, coords)
     return bb_coords
     
-def peptide_calc_bb_rsmd(pdb1, pdb2):
+def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
     #print pdb1, pdb2
     names = ['N', 'C', 'CA', 'CB', 'O']
-
+    
     with open(pdb1, 'r') as f:
-            lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
-            crds1 = {}
-            for line in lines:
-                    coords = [line[30:38], line[38:46], line[46:54]]
-                    crds1[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
+        lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
+        crds1 = {}
+        for line in lines:
+            if chain and (line[21] != chain):
+                continue
+                
+            coords = [line[30:38], line[38:46], line[46:54]]
+            crds1[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
 
     with open(pdb2, 'r') as f:
-            lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
-            crds2 = {}
-            for line in lines:
-                    coords = [line[30:38], line[38:46], line[46:54]]
-                    crds2[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
+        lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
+        crds2 = {}
+        for line in lines:
+            if chain and (line[21] != chain):
+                continue
+                
+            coords = [line[30:38], line[38:46], line[46:54]]
+            crds2[(line[22:26].strip(), line[12:16].strip())] = np.array(map(float, coords))
 
     n = 0
     rmsd = 0.0
     nanar = np.array([np.nan]*3)
     for key, crd1 in crds1.iteritems():
-        if key[1] not in names:
-            continue
+        if backbone:
+            if key[1] not in names:
+                continue
 
-        if key[1] == 'CB':
-            crd2 = crds2.get(key, nanar.copy())
-        else:
-            try:
-                crd2 = crds2[key]
-            except KeyError as e:
-                logging.warning('Key Error (%s, %s): ' % (pdb1,pdb2) + str(e))
+        #if key[1] == 'CB':
+        #    crd2 = crds2.get(key, nanar.copy())
+        #else:
+        try:
+            crd2 = crds2[key]
+        except KeyError as e:
+            logging.warning('Key Error (%s, %s): ' % (pdb1,pdb2) + str(e))
+            continue
 
         if not np.isnan(crd2).any():
             rmsd += ((crd1 - crd2)**2).sum()
@@ -332,6 +340,7 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                 lines = []
                 id = line.split()[1]
                 continue
+                
             if line.startswith('ATOM') or line.startswith('HETATM'):
                 if only_chain_b and line[21] != 'B':
                     continue
@@ -340,14 +349,23 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                     continue
                 
                 coords = line[30:38], line[38:46], line[46:54]
+                try:
+                    coords = np.array(map(float, coords))
+                except ValueError as e:
+                    logging.exception(e)
+                    continue
+                    
+                if any(np.isnan(coords)):
+                    logging.warning('Invalid coordinates in %s' % id)
+                    continue
+                
                 label  = map(str.strip, [line[12:16], line[17:20], line[22:26]])
-                lines.append((tuple(label), np.array(map(float, coords))))
+                lines.append((tuple(label), coords))
+                
             if line.startswith('END'):
                 rmsd = 0.0
                 n = 0
                 for label, crd in lines:
-
-
                     if label in refcrd:
                         crd1 = refcrd[label]
                         crd2 = crd
@@ -355,9 +373,9 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                         rmsd += ((crd1 - crd2)**2).sum()
                         n += 1
                     else:   
-                        sys.stderr.write('Model %s Warning: atom %s is not in the reference molecule\n' % (id, str(label)))
+                        logging.warning('Model %s Warning: atom %s is not in the reference molecule' % (id, str(label)))
                 if n == 0:
-                    sys.stderr.write('Model %s Error: n = 0\n' % id)
+                    logging.error('Model %s Error: n = 0' % id)
                     continue #sys.exit(1)
                 rmsd = np.sqrt(rmsd/n)
                 #print('%s %.3f' % (id, rmsd))

@@ -26,11 +26,20 @@ def file_absent_error(path):
 def shell_call(call, shell=False):
     output = None
     try:
-        logging.debug('Command executed:' + ' '.join(call))
+        cmd_string = call
+        if not shell:
+            cmd_string = ' '.join(call)
+            
+        logging.debug('Command executed: ' + cmd_string)
         output = subprocess.check_output(call, shell=shell, stderr=subprocess.STDOUT)
+        
+        logging.debug('Command output: ')
         logging.debug(output)
-    except subprocess.CalledProcessError as e:
+        
+    except Exception as e:
         logging.exception('Exception caught')
+        raise RuntimeError(e)
+        
     return output
 
 def remove_files(path_list):

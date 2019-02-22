@@ -7,31 +7,6 @@ from collections import OrderedDict
 import logging
 import numpy as np
 
-def conv3d_shape(h_w_d, kernel_size=1, stride=1, padding=0, dilation=1, ceil_flag=False):
-    """
-    Utility function for computing output of convolutions
-    takes a tuple of (h,w,d) and returns a tuple of (h,w,d)
-    """
-
-    def transform(inp):
-        if type(inp) is int:
-            res = np.array([inp, inp, inp])
-        elif type(inp) in [tuple, list]:
-            res = np.array(inp)
-        else:
-            raise TypeError('Must be int, list or tuple')
-        return res
-    
-    _kernel_size = transform(kernel_size)
-    _stride = transform(stride)
-    _padding = transform(padding)
-    _dilation = transform(dilation)
-        
-    rnd = np.ceil if ceil_flag else np.floor
-    res = rnd(((np.array(h_w_d) + (2 * _padding) - (_dilation * (_kernel_size - 1) ) - 1) / _stride) + 1)
-    
-    return res
-
 # strip_keys is needed because if DataParallel was used during saving, the keys
 # of model_state_dict are prepended with 'module.'
 def load_model(model, saved_model_path, cpu=True, strip_keys=False):
@@ -53,23 +28,44 @@ def load_model(model, saved_model_path, cpu=True, strip_keys=False):
     model.load_state_dict(model_state_dict)
     return model
 
-def _init_fun(x):
-    mean = 0.0
-    std = 0.001
-    nn.init.normal_(x.weight, mean, std) if hasattr(x, 'weight') else None
+class ModelTemplate(nn.Module):
+    def __init__(self):
+        nn.Module.__init__(self)
+        
+    def _infer_shape(self, layers, shape):
+        x = torch.randn(tuple([1] + shape))
+        logging.info('Inferring shape for convolutional part...')
+        logging.info(x.shape)
+        
+        for l in layers:
+            x = l(x);
+            logging.info("==== " + str(l) + " ====")
+            logging.info(x.shape)
+        
+        return torch.tensor(x.shape)
+    
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv3d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, nn.BatchNorm3d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+    
+    def forward(self, x):
+        for l in self.conv:
+            x = l(x)
+        x = x.view(x.size()[0], -1)
+        for l in self.fc:
+            x = l(x)
+        x = torch.sigmoid(x)
+        return x  
+    
+# ========================= Best Model So Far ===========================
+#
+#                               Model3
+#
 
-def _output_shape(in_shape, layers):
-    x = in_shape.copy()
-    print x
-    
-    for l in layers:
-        if not hasattr(l, 'kernel_size'):
-            continue
-        cflag = l.ceil_mode if hasattr(l, 'ceil_mode') else False
-        x = conv3d_shape(x, l.kernel_size, l.stride, l.padding, l.dilation, cflag)
-        print x
-    return x
-    
 class Model1(nn.Module):
     def __init__(self, input_shape):
         nn.Module.__init__(self)
@@ -285,17 +281,17 @@ class Model5(nn.Module):
             [nn.BatchNorm3d(self.input_shape[0]),
              nn.Conv3d(self.input_shape[0], 64, 3, padding=1), 
              nn.ReLU(), 
-             nn.MaxPool3d(2),
+             nn.MaxPool3d(2, ceil_mode=True),
              nn.Dropout3d(),
                 
              nn.Conv3d(64, 128, 3, padding=1), 
              nn.ReLU(), 
-             nn.MaxPool3d(2), 
+             nn.MaxPool3d(2, ceil_mode=True), 
              nn.Dropout3d(),
                 
              nn.Conv3d(128, 256, 3, padding=1), 
              nn.ReLU(), 
-             nn.MaxPool3d(2),
+             nn.MaxPool3d(2, ceil_mode=True),
              nn.Dropout3d()])
         
         conv_shape = _output_shape(self.input_shape[1:], self.conv)
@@ -309,7 +305,7 @@ class Model5(nn.Module):
              nn.ReLU(),
              nn.Dropout3d(),
 
-             nn.Linear(1024, 1)])
+             nn.Linear(1024, 2)])
         
         map(_init_fun, self.conv)
         map(_init_fun, self.fc)
@@ -606,4 +602,182 @@ class ModelClass_Probe(nn.Module):
         x = self.fc3(x)
         x = torch.sigmoid(x)
         return x
+    
+# ======================= Regularization Testing =======================   
+class RegModel1(ModelTemplate):
+    def __init__(self, input_shape):
+        ModelTemplate.__init__(self)
         
+        self.input_shape = list(input_shape)
+        
+        self.conv = nn.ModuleList(
+            [nn.BatchNorm3d(self.input_shape[0]),
+             nn.Conv3d(self.input_shape[0], 128, 3, padding=1), 
+             nn.BatchNorm3d(128),
+             nn.ReLU(), 
+             nn.MaxPool3d(2),
+
+             nn.Conv3d(128, 256, 3, padding=1),
+             nn.BatchNorm3d(256),
+             nn.ReLU(), 
+             nn.MaxPool3d(2), 
+
+             nn.Conv3d(256, 512, 3, padding=1), 
+             nn.BatchNorm3d(512),
+             nn.ReLU(), 
+             nn.MaxPool3d(2)])
+        
+        self.conv_shape = self._infer_shape(self.conv, self.input_shape)
+        fc_input = int(self.conv_shape.prod())
+        
+        self.fc = nn.ModuleList(
+            [nn.Linear(fc_input, 1024),
+             nn.BatchNorm1d(1024),
+             nn.ReLU(),
+             
+             nn.Linear(1024, 1)])
+        
+        self._init_weights()
+        #map(_init_fun, self.conv)
+        #map(_init_fun, self.fc)
+    
+# removing leading batchnorm
+class RegModel2(ModelTemplate):
+    def __init__(self, input_shape):
+        ModelTemplate.__init__(self)
+        
+        self.input_shape = list(input_shape)
+        
+        self.conv = nn.ModuleList(
+            [nn.Conv3d(self.input_shape[0], 128, 3, padding=1),
+             nn.BatchNorm3d(128),
+             nn.ReLU(),
+             nn.MaxPool3d(2),
+
+             nn.Conv3d(128, 256, 3, padding=1),
+             nn.BatchNorm3d(256),
+             nn.ReLU(), 
+             nn.MaxPool3d(2), 
+
+             nn.Conv3d(256, 512, 3, padding=1), 
+             nn.BatchNorm3d(512),
+             nn.ReLU(), 
+             nn.MaxPool3d(2)])
+        
+        self.conv_shape = self._infer_shape(self.conv, self.input_shape)
+        fc_input = int(self.conv_shape.prod())
+        
+        self.fc = nn.ModuleList(
+            [nn.Linear(fc_input, 1024),
+             nn.BatchNorm1d(1024),
+             nn.ReLU(),
+             
+             nn.Linear(1024, 1)])
+        
+        self._init_weights()
+
+# removing all batchnorm
+class RegModel3(ModelTemplate):
+    def __init__(self, input_shape):
+        ModelTemplate.__init__(self)
+        
+        self.input_shape = list(input_shape)
+        
+        self.conv = nn.ModuleList(
+            [nn.Conv3d(self.input_shape[0], 128, 3, padding=1), 
+             nn.ReLU(),
+             nn.MaxPool3d(2),
+
+             nn.Conv3d(128, 256, 3, padding=1),
+             nn.ReLU(), 
+             nn.MaxPool3d(2), 
+
+             nn.Conv3d(256, 512, 3, padding=1), 
+             nn.ReLU(), 
+             nn.MaxPool3d(2)])
+        
+        self.conv_shape = self._infer_shape(self.conv, self.input_shape)
+        fc_input = int(self.conv_shape.prod())
+        
+        self.fc = nn.ModuleList(
+            [nn.Linear(fc_input, 1024),
+             nn.ReLU(),
+             
+             nn.Linear(1024, 1)])
+        
+        self._init_weights()
+        
+# adding dropout
+class RegModel4(ModelTemplate):
+    def __init__(self, input_shape):
+        ModelTemplate.__init__(self)
+        
+        self.input_shape = list(input_shape)
+        
+        self.conv = nn.ModuleList(
+            [nn.Conv3d(self.input_shape[0], 128, 3, padding=1), 
+             nn.ReLU(),
+             nn.MaxPool3d(2),
+
+             nn.Conv3d(128, 256, 3, padding=1),
+             nn.ReLU(), 
+             nn.MaxPool3d(2), 
+
+             nn.Conv3d(256, 512, 3, padding=1), 
+             nn.ReLU(), 
+             nn.MaxPool3d(2)])
+        
+        self.conv_shape = self._infer_shape(self.conv, self.input_shape)
+        fc_input = int(self.conv_shape.prod())
+        
+        self.fc = nn.ModuleList(
+            [nn.Linear(fc_input, 1024),
+             nn.ReLU(),
+             nn.Dropout3d(),
+             
+             nn.Linear(1024, 1)])
+        
+        self._init_weights()
+
+# deprecated functions
+def conv3d_shape(h_w_d, kernel_size=1, stride=1, padding=0, dilation=1, ceil_flag=False):
+    """
+    Utility function for computing output of convolutions
+    takes a tuple of (h,w,d) and returns a tuple of (h,w,d)
+    """
+
+    def transform(inp):
+        if type(inp) is int:
+            res = np.array([inp, inp, inp])
+        elif type(inp) in [tuple, list]:
+            res = np.array(inp)
+        else:
+            raise TypeError('Must be int, list or tuple')
+        return res
+    
+    _kernel_size = transform(kernel_size)
+    _stride = transform(stride)
+    _padding = transform(padding)
+    _dilation = transform(dilation)
+        
+    rnd = np.ceil if ceil_flag else np.floor
+    res = rnd(((np.array(h_w_d) + (2 * _padding) - (_dilation * (_kernel_size - 1) ) - 1) / _stride) + 1)
+    
+    return res
+
+def _init_fun(x):
+    mean = 0.0
+    std = 0.001
+    nn.init.normal_(x.weight, mean, std) if hasattr(x, 'weight') else None
+
+def _output_shape(in_shape, layers):
+    x = in_shape.copy()
+    print x
+    
+    for l in layers:
+        if not hasattr(l, 'kernel_size'):
+            continue
+        cflag = l.ceil_mode if hasattr(l, 'ceil_mode') else False
+        x = conv3d_shape(x, l.kernel_size, l.stride, l.padding, l.dilation, cflag)
+        print x
+    return x

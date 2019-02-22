@@ -113,22 +113,13 @@ class GridMaker():
         grid = grid.reshape(dim)
         create_gif(self, grid, channel=5, thre=0.1)
         
-    def grid_to_pdb(self, save_pdb, grid, bin_size, ch=0):
+    def grid_to_pdb(self, save_pdb, grid, bin_size, channel=None, use_channel_names=False):
         origin = np.array([7.473, 4.334, 7.701]) - 5.0;
         
-        ch_per_mol = grid.shape[0] / 2
-        
-        if (ch > ch_per_mol):
-            throw_error(ValueError, 'Channel id must be less, than %i' % ch_per_mol)
+        if grid.shape[0] % 2 != 0:
+            raise ValueError('Number of channels must be even (%i)' % grid.shape[0])
             
-        spacial_rec = grid[ch]
-        spacial_lig = grid[ch+ch_per_mol]
-        dims = spacial_rec.shape
-        coords = product(*[range(x) for x in dims])
-        
-        max_lig = spacial_lig.max()
-        levels = [max_lig / 2**i for i in range(1, 5)]
-        logging.info(levels)
+        ch_per_mol = grid.shape[0] / 2
         
         def ele_map(val):
             if val > levels[0]:
@@ -142,23 +133,49 @@ class GridMaker():
             else:
                 ele = ' C'
             return ele
-
+        
+        if not channel:
+            clist = range(ch_per_mol)
+        else:
+            clist = [channel]
+        
         with open(save_pdb, 'w') as f:
-            for crd in coords:
-                xyz = (np.array(crd) / bin_size) + origin
-                
-                if spacial_rec[crd] > 0.0:
-                    ele = ele_map(spacial_rec[crd])
+            for mdl, ch in enumerate(clist, 1):
+                if (ch > ch_per_mol):
+                    throw_error(ValueError, 'Channel id must be less, than %i' % ch_per_mol)
+
+                spacial_rec = grid[ch]
+                spacial_lig = grid[ch+ch_per_mol]
+                dims = spacial_rec.shape
+                coords = product(*[range(x) for x in dims])
+
+                max_lig = spacial_lig.max()
+                levels = [max_lig / 2**i for i in range(1, 5)]
+                logging.info(levels)
+            
+                if use_channel_names:
+                    names = self.prop_table.columns[1:]
+                    channel_name = names[mdl]
+                else:
+                    channel_name = str(mdl)
                     
-                    line = 'ATOM      1  C   *** A   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
-                        (xyz[0], xyz[1], xyz[2], ele)
-                    f.write(line)
-                    
-                if spacial_lig[crd] > 0.0:
-                    ele = ele_map(spacial_lig[crd])
-                    line = 'ATOM      1  C   *** B   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
-                        (xyz[0], xyz[1], xyz[2], ele)
-                    f.write(line)
+                f.write('HEADER %s\n' % channel_name)
+                for crd in coords:
+                    xyz = (np.array(crd) * bin_size) + origin
+
+                    if spacial_rec[crd] > 0.0:
+                        ele = ele_map(spacial_rec[crd])
+
+                        line = 'ATOM      1  C   *** A   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
+                            (xyz[0], xyz[1], xyz[2], ele)
+                        f.write(line)
+
+                    if spacial_lig[crd] > 0.0:
+                        ele = ele_map(spacial_lig[crd])
+                        line = 'ATOM      1  C   *** B   1    %8.3f%8.3f%8.3f  1.00  1.00          %s\n' % \
+                            (xyz[0], xyz[1], xyz[2], ele)
+                        f.write(line)
+                f.write('END\n')
                 
     def draw_grid_in_jupyter_notebook(self, grid, channel, thre):
         from IPython.display import Image
@@ -168,49 +185,32 @@ class GridMaker():
         return 1
     
     # this one uses direct binding of C++ code, so better to use this one
-    def make_grid(self, inputpdb, binsize, remove_tmp=True, hsd2his=False):
-        if hsd2his:
-            tmp_file = inputpdb + '.tmp.' + str(os.getpid())
-            utils.hsd2his(inputpdb, tmp_file)
-        else:
-            tmp_file = inputpdb
+    def make_grid(self, inputpdb, binsize):
+        #if hsd2his:
+        #    tmp_file = inputpdb + '.tmp.' + str(os.getpid())
+        #    utils.hsd2his(inputpdb, tmp_file)
+        #else:
+        #    tmp_file = inputpdb
             
-        grid = molgrid.make_grid(tmp_file, self.properties_file, self.types_file, binsize, self.nchannels)
+        grid = molgrid.make_grid(inputpdb, self.properties_file, self.types_file, binsize, self.nchannels)
         
-        if hsd2his and remove_tmp:
-            remove_files([tmp_file])
+        #if hsd2his and remove_tmp:
+        #    remove_files([tmp_file])
             
         return grid
     
-    def make_grid_file(self, savepath, inputpdb, binsize, remove_tmp=True, hsd2his=False):
-        if hsd2his:
-            tmp_file = inputpdb + '.tmp.' + str(os.getpid())
-            utils.hsd2his(inputpdb, tmp_file)
-        else:
-            tmp_file = inputpdb
+    def make_grid_file(self, savepath, inputpdb, binsize):
+        #if hsd2his:
+        #    tmp_file = inputpdb + '.tmp.' + str(os.getpid())
+        #    utils.hsd2his(inputpdb, tmp_file)
+        #else:
+        #    tmp_file = inputpdb
         
-        call = [self.grid_bin, tmp_file, self.properties_file, self.types_file, str(binsize), str(self.nchannels), savepath]
+        call = [self.grid_bin, inputpdb, self.properties_file, self.types_file, str(binsize), str(self.nchannels), savepath]
         output = shell_call(call)
                 
-        if hsd2his and remove_tmp:
-            remove_files([tmp_file])
+        #if hsd2his and remove_tmp:
+        #    remove_files([tmp_file])
             
         return output
-
-    def make_grids(self, savedir, pdblist, binsize):
-        table = []
-        with open(pdblist, 'r') as f:
-            #g.write(' grid\n')
-            counter = 0
-            
-            for pdb in f:
-                pdb = pdb.strip()
-                if pdb[-4:] != '.pdb':
-                    raise RuntimeError('Files must end with .pdb')
-                
-                outfile = savedir + '/' + os.path.basename(pdb)[:-3] + 'bin'
-                self.make_grid_file(outfile, pdb, binsize)
-                
-                #g.write('%i %s\n' % (counter, outfile))
-                table.append((counter, outfile))
-                counter += 1
+    
