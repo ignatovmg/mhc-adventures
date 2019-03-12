@@ -1,9 +1,3 @@
-
-# coding: utf-8
-
-# In[1]:
-
-
 import glob
 import os
 import pandas as pd
@@ -26,12 +20,8 @@ if define.PLIP_DIR not in sys.path:
     sys.path.append(define.PLIP_DIR)
 
 from plip.modules.preparation import PDBComplex
-
 import plip.modules.config
 plip.modules.config.PEPTIDES = ['B']
-
-
-# In[6]:
 
 
 def plip_read_pdb_complex(path):
@@ -42,6 +32,7 @@ def plip_read_pdb_complex(path):
     assert(len(mol.interaction_sets) == 1)
     inter = mol.interaction_sets.values()[0]
     return inter
+
 
 def plip_read_pdb_rec_lig(rec, lig, remove_tmp=True):
     tmp_name = str(os.getpid()) + '.pdb'
@@ -54,19 +45,19 @@ def plip_read_pdb_rec_lig(rec, lig, remove_tmp=True):
     return inter
 
 
-# In[9]:
-
-
 def _extract_keys(bond, keys):
     d = bond.__dict__
     return {k:d[k] for k in keys}
 
+
 def _process_atom_list(atoms):
     return [(a.type, a.coords) for a in atoms]
+
 
 def _process_common_bond(bond):
     keys = ['restype', 'resnr', 'reschain', 'restype_l', 'resnr_l', 'reschain_l']
     return _extract_keys(bond, keys)
+
 
 def _process_bond(bond):
     rec = _process_common_bond(bond)
@@ -155,9 +146,6 @@ def _process_bond(bond):
     return rec
 
 
-# In[10]:
-
-
 def make_interaction_table(inter):
     table = {}
     for i, bond in enumerate(inter.all_itypes):
@@ -165,9 +153,6 @@ def make_interaction_table(inter):
         
     table = pd.DataFrame(table).transpose()   
     return table
-
-
-# In[11]:
 
 
 def describe_interaction(inter):

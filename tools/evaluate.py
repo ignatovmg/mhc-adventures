@@ -23,6 +23,7 @@ from ilovemhc.define import GRID_PRM_DIR
 from ilovemhc.engines import make_trainer, make_evaluator, get_device
 from ilovemhc.torch_models import load_model
 
+
 @click.command()
 @click.argument('model_file', type=click.Path(exists=True)) 
 @click.argument('data_csv', type=click.Path(exists=True)) 
@@ -39,7 +40,6 @@ from ilovemhc.torch_models import load_model
               help='Two values m and s white space separated (where m -> y(m) = 0.5 and s -> steepness)')
 @click.option('--atom_property_csv', default=None, 
               help='CSV with atomic properties (root directory in ' + GRID_PRM_DIR)
-
 def run(model_file,
         data_csv, 
         data_root,
@@ -54,21 +54,10 @@ def run(model_file,
         scaling, 
         atom_property_csv):
     
-    logging.info('model_file        = {}'.format(model_file))
-    logging.info('data_csv          = {}'.format(data_csv))
-    logging.info('data_root         = {}'.format(data_root))
-    logging.info('output_dir        = {}'.format(output_dir))
-    logging.info('output_prefix     = {}'.format(output_prefix))
-    logging.info('batch_size        = {}'.format(batch_size))
-    logging.info('ncores            = {}'.format(ncores))
-    logging.info('device_name       = {}'.format(device_name))
-    logging.info('bin_size          = {}'.format(bin_size))
-    logging.info('ngpu              = {}'.format(ngpu))
-    logging.info('target_column     = {}'.format(target_column))
-    logging.info('scaling           = {}'.format(scaling))
-    logging.info('atom_property_csv = {}'.format(atom_property_csv))
+    for k, v in locals().iteritems():
+        logging.info("{:20s} = {}".format(str(k), str(v)))
     
-    #model_prefix = 'model'
+    # model_prefix = 'model'
 
     logging.info('Getting device..')
     avail, device = get_device(device_name)

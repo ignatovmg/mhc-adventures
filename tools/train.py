@@ -1,10 +1,8 @@
 import pandas as pd
 import numpy as np
-import os
-import sys
 
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 from torch import nn
 import torch.nn.functional as F
@@ -16,22 +14,21 @@ torch.manual_seed(123456)
 import click
 import logging
 
-import ilovemhc
 from ilovemhc.wrappers import *
-from ilovemhc import utils
-from ilovemhc import grids
 from ilovemhc import dataset
 from ilovemhc.grids import GridMaker
 from ilovemhc.define import GRID_PRM_DIR
 from ilovemhc.engines import make_trainer, make_evaluator, get_device
 from ilovemhc.torch_models import load_model
 
+
 @click.command()
 @click.argument('model_dir')
 @click.argument('model_name')
 @click.argument('train_csv', type=click.Path(exists=True)) 
 @click.argument('test_csv', type=click.Path(exists=True))
-@click.argument('data_root', type=click.Path(exists=True))
+@click.argument('train_root', type=click.Path(exists=True))
+@click.argument('test_root', type=click.Path(exists=True))
 @click.option('-w', '--weight_decay', default=0.0001)
 @click.option('-l', '--learning_rate', default=0.0001)
 @click.option('-b', '--batch_size', default=128)
@@ -44,14 +41,13 @@ from ilovemhc.torch_models import load_model
 @click.option('--target_column', default='target', help='Name of the target column in csv files')
 @click.option('--scaling', default=(3.0, 1.5), nargs=2, type=float, 
               help='Two values m and s white space separated (where m -> y(m) = 0.5 and s -> steepness)')
-@click.option('--atom_property_csv', default=None, 
-              help='CSV with atomic properties (root directory in ' + GRID_PRM_DIR)
-
+@click.option('--atom_property_csv', default=None, help='CSV with atomic properties (root directory in ' + GRID_PRM_DIR)
 def run(model_dir,
         model_name, 
         train_csv,
         test_csv, 
-        data_root,
+        train_root,
+        test_root,
         weight_decay, 
         learning_rate, 
         batch_size, 
@@ -64,26 +60,11 @@ def run(model_dir,
         target_column, 
         scaling, 
         atom_property_csv):
-              
+
+    for k, v in locals().iteritems():
+        logging.info("{:20s} = {}".format(str(k), str(v)))
+
     exec 'from ilovemhc.torch_models import %s as current_model_class' % model_name in globals(), locals()
-    
-    logging.info('model_dir         = {}'.format(model_dir))
-    logging.info('model_name        = {}'.format(model_name))
-    logging.info('train_csv         = {}'.format(train_csv))
-    logging.info('test_csv          = {}'.format(test_csv))
-    logging.info('data_root         = {}'.format(data_root))
-    logging.info('weight_decay      = {}'.format(weight_decay))
-    logging.info('learning_rate     = {}'.format(learning_rate))
-    logging.info('batch_size        = {}'.format(batch_size))
-    logging.info('max_epochs        = {}'.format(max_epochs))
-    logging.info('ncores            = {}'.format(ncores))
-    logging.info('device_name       = {}'.format(device_name))
-    logging.info('bin_size          = {}'.format(bin_size))
-    logging.info('ngpu              = {}'.format(ngpu))
-    logging.info('use_saved         = {}'.format(use_saved))
-    logging.info('target_column     = {}'.format(target_column))
-    logging.info('scaling           = {}'.format(scaling))
-    logging.info('atom_property_csv = {}'.format(atom_property_csv))
               
     model_prefix = 'model'
 
@@ -109,7 +90,7 @@ def run(model_dir,
     
     logging.info('Creating test dataset..')
     test_set = dataset.MolDataset(test_table, 
-                                  data_root, 
+                                  test_root,
                                   grid_maker=grid_maker,
                                   bin_size=bin_size,
                                   target_transform=target_scale,
@@ -117,7 +98,7 @@ def run(model_dir,
     
     logging.info('Creating train dataset..')
     train_set = dataset.MolDataset(train_table, 
-                                   data_root,
+                                   train_root,
                                    grid_maker=grid_maker,
                                    bin_size=bin_size,
                                    target_transform=target_scale)
@@ -176,19 +157,7 @@ def run(model_dir,
     trainer(train_loader, max_epochs)
     
     logging.info("COMPLETED")
-    
-    #trainer = regression_trainer_with_tagwise_statistics(model, 
-    #                                                     optimizer, 
-    #                                                     loss, 
-    #                                                     test_loader, 
-    #                                                     test_table, 
-    #                                                     device, 
-    #                                                     model_dir, 
-    #                                                     model_prefix,
-    #                                                     every_n_iter=10)
-    
-    
-    #trainer.run(train_loader, max_epochs)
+
     
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', 

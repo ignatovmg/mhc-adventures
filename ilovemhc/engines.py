@@ -132,6 +132,144 @@ def regression_stats(df, ascending=False):
         output[name] = to_fill
         
     return output
+    
+def make_evaluator(model, loss_fn, device, model_dir='models', model_prefix='model', every_niter=100):
+    def _inference_model(batch):
+        with torch.no_grad():
+            x = batch[0].to(device)
+            y = batch[1].to(device)
+            index = batch[2]
+            y_pred = model(x)
+            #logging.debug(y_pred)
+            y_pred = y_pred[:, 0]
+            
+            loss = loss_fn(y_pred, y)
+            return {'loss': loss.item(), 'prediction': y_pred, 'target': y, 'idx': index}
+        
+    def run(test_loader, test_table, epoch=1):
+        logging.info('VALID EPOCH[%i] STARTED' % epoch)
+        
+        all_output = []
+        def _trans_output_to_store(output):
+            newdict = {}
+            newdict['idx'] = output['idx'].cpu().numpy()
+            newdict['prediction'] = output['prediction'].cpu().numpy() #[:, 0]
+            newdict['target'] = output['target'].cpu().numpy()
+            return pd.DataFrame(newdict)
+        
+        model.eval()
+        
+        for niter, batch in enumerate(test_loader, 1):
+            batch_size = batch[0].shape[0]
+            output = _inference_model(batch)
+            logging.info('VALID EPOCH[%i] Iteration[%i] Loss = %.5f' % (epoch, niter, output['loss']))
+            
+            if niter % every_niter == 0:
+                logging.info(output)
+            
+            loc_table = _trans_output_to_store(output)
+            all_output.append(loc_table)
+            
+        # Calculate statistics
+        all_output = pd.concat(all_output)
+        indices = all_output['idx'].values
+        all_output.index = indices
+        all_output['tag'] = test_table['tag'].iloc[indices]
+        all_output['target_orig'] = test_table['target'].iloc[indices]
+        
+        # Save output
+        save_dir = Path(model_dir)
+        save_dir.mkdir_p()
+        output_file = save_dir.joinpath(model_prefix + '-output-%i.csv' % epoch)
+        logging.info('Saving model output to %s' % output_file)
+        all_output.to_csv(output_file, float_format='%.3f', index=True)
+        
+        # Save statistics
+        stats_table = pd.DataFrame(regression_stats(all_output))
+        stats_table = stats_table.transpose()
+        stats_file = save_dir.joinpath(model_prefix + '-stats-%i.csv' % epoch)
+        logging.info('Saving model statistics to %s' % stats_file)
+        stats_table.to_csv(stats_file, float_format='%.3f')
+        
+        logging.info('========    Statistics   =======')
+        logging.info(stats_table)
+        logging.info('======== Mean statistics =======')
+        logging.info(stats_table.mean())
+        
+        logging.info('VALID EPOCH[%i] COMPLETED' % epoch)
+        
+    return run
+    
+def make_trainer(model, 
+                 optimizer, 
+                 loss_fn, 
+                 device, 
+                 evaluator, 
+                 test_loader, 
+                 test_table, 
+                 model_dir='models', 
+                 model_prefix='model', 
+                 every_niter=100):
+    
+    def _update_model(batch):
+        x = batch[0].to(device)
+        y = batch[1].type(torch.FloatTensor).to(device)
+        optimizer.zero_grad()
+        
+        with torch.set_grad_enabled(True):
+            y_pred = model(x)[:, 0]
+            loss = loss_fn(y_pred, y)
+            loss.backward()
+            optimizer.step()
+        return {'loss': loss.item(), 'prediction': y_pred, 'target': y}
+
+    def run(train_loader, nepoch):
+        
+        for epoch in range(1, nepoch + 1):
+            epoch_loss = []
+            block_loss = []
+            block_nitems = 0
+            epoch_nitems = 0
+            
+            model.train()
+            
+            logging.info('TRAIN EPOCH[%i] STARTED' % epoch)
+            for niter, batch in enumerate(train_loader, 1):
+                output = _update_model(batch)
+                
+                batch_size = batch[0].size(0)
+                epoch_loss.append(output['loss'] * batch_size)
+                block_loss.append(output['loss'] * batch_size)
+                block_nitems += batch_size
+                epoch_nitems += batch_size
+                
+                logging.info('TRAIN EPOCH[%i] Iteration[%i] Loss = %.5f' % (epoch, niter, output['loss']))
+                if niter % every_niter == 0:
+                    
+                    logging.info('TRAIN EPOCH[%i] Iteration[%i-%i] BlockLoss = %.5f' % (epoch, max(1, niter-every_niter), niter, 
+                                                                                   (sum(block_loss) / block_nitems)))
+                    logging.info(output)
+                    block_loss = []
+                    block_nitems = 0
+                    
+            logging.info('TRAIN EPOCH[%i] COMPLETED' % epoch)
+            logging.info('TRAIN EPOCH[%i] AverageLoss = %.5f' % (epoch, sum(epoch_loss) / epoch_nitems))
+            epoch_loss = []
+            epoch_nitems = 0
+            
+            save_dir = Path(model_dir)
+            save_dir.mkdir_p()
+            save_file = save_dir.joinpath(model_prefix + '-model-%i.pth' % epoch)
+            logging.info('TRAIN EPOCH[%i] Saving model to %s' % (epoch, save_file))
+            
+            with open(str(save_file), 'w') as f:
+                torch.save(model, f)
+
+            evaluator(test_loader, test_table, epoch)
+            
+    return run
+    
+#============== deprecated ==============
 
 def regression_evaluator_with_tagwise_statistics(model, loss, test_table, device, stats_prefix):
     assert(test_table.loc[:, ['tag','target','path']].dropna().shape[0] == test_table.shape[0])
@@ -272,139 +410,3 @@ def regression_trainer_with_tagwise_statistics(model, optim, loss, test_loader, 
         evaluator.run(test_loader)
         
     return trainer
-
-    
-def make_evaluator(model, loss_fn, device, model_dir='models', model_prefix='model', every_niter=100):
-    def _inference_model(batch):
-        with torch.no_grad():
-            x = batch[0].to(device)
-            y = batch[1].to(device)
-            index = batch[2]
-            y_pred = model(x)[:, 0]
-            
-            loss = loss_fn(y_pred, y)
-            return {'loss': loss.item(), 'prediction': y_pred, 'target': y, 'idx': index}
-        
-    def run(test_loader, test_table, epoch=1):
-        logging.info('VALID EPOCH[%i] STARTED' % epoch)
-        
-        all_output = []
-        def _trans_output_to_store(output):
-            newdict = {}
-            newdict['idx'] = output['idx'].cpu().numpy()
-            newdict['prediction'] = output['prediction'].cpu().numpy() #[:, 0]
-            newdict['target'] = output['target'].cpu().numpy()
-            return pd.DataFrame(newdict)
-        
-        model.eval()
-        
-        for niter, batch in enumerate(test_loader, 1):
-            batch_size = batch[0].shape[0]
-            output = _inference_model(batch)
-            logging.info('VALID EPOCH[%i] Iteration[%i] Loss = %.5f' % (epoch, niter, output['loss']))
-            
-            if niter % every_niter == 0:
-                logging.info(output)
-            
-            loc_table = _trans_output_to_store(output)
-            all_output.append(loc_table)
-            
-        # Calculate statistics
-        all_output = pd.concat(all_output)
-        indices = all_output['idx'].values
-        all_output.index = indices
-        all_output['tag'] = test_table['tag'].iloc[indices]
-        all_output['target_orig'] = test_table['target'].iloc[indices]
-        
-        # Save output
-        save_dir = Path(model_dir)
-        save_dir.mkdir_p()
-        output_file = save_dir.joinpath(model_prefix + '-output-%i.csv' % epoch)
-        logging.info('Saving model output to %s' % output_file)
-        all_output.to_csv(output_file, float_format='%.3f', index=True)
-        
-        # Save statistics
-        stats_table = pd.DataFrame(regression_stats(all_output))
-        stats_table = stats_table.transpose()
-        stats_file = save_dir.joinpath(model_prefix + '-stats-%i.csv' % epoch)
-        logging.info('Saving model statistics to %s' % stats_file)
-        stats_table.to_csv(stats_file, float_format='%.3f')
-        
-        logging.info('========    Statistics   =======')
-        logging.info(stats_table)
-        logging.info('======== Mean statistics =======')
-        logging.info(stats_table.mean())
-        
-        logging.info('VALID EPOCH[%i] COMPLETED' % epoch)
-        
-    return run
-    
-def make_trainer(model, 
-                 optimizer, 
-                 loss_fn, 
-                 device, 
-                 evaluator, 
-                 test_loader, 
-                 test_table, 
-                 model_dir='models', 
-                 model_prefix='model', 
-                 every_niter=100):
-    
-    def _update_model(batch):
-        x = batch[0].to(device)
-        y = batch[1].type(torch.FloatTensor).to(device)
-        optimizer.zero_grad()
-        
-        with torch.set_grad_enabled(True):
-            y_pred = model(x)[:, 0]
-            loss = loss_fn(y_pred, y)
-            loss.backward()
-            optimizer.step()
-        return {'loss': loss.item(), 'prediction': y_pred, 'target': y}
-
-    def run(train_loader, nepoch):
-        
-        for epoch in range(1, nepoch + 1):
-            epoch_loss = []
-            block_loss = []
-            block_nitems = 0
-            epoch_nitems = 0
-            
-            model.train()
-            
-            logging.info('TRAIN EPOCH[%i] STARTED' % epoch)
-            for niter, batch in enumerate(train_loader, 1):
-                output = _update_model(batch)
-                
-                batch_size = batch[0].size(0)
-                epoch_loss.append(output['loss'] * batch_size)
-                block_loss.append(output['loss'] * batch_size)
-                block_nitems += batch_size
-                epoch_nitems += batch_size
-                
-                logging.info('TRAIN EPOCH[%i] Iteration[%i] Loss = %.5f' % (epoch, niter, output['loss']))
-                if niter % every_niter == 0:
-                    
-                    logging.info('TRAIN EPOCH[%i] Iteration[%i-%i] BlockLoss = %.5f' % (epoch, max(1, niter-every_niter), niter, 
-                                                                                   (sum(block_loss) / block_nitems)))
-                    logging.info(output)
-                    block_loss = []
-                    block_nitems = 0
-                    
-            logging.info('TRAIN EPOCH[%i] COMPLETED' % epoch)
-            logging.info('TRAIN EPOCH[%i] AverageLoss = %.5f' % (epoch, sum(epoch_loss) / epoch_nitems))
-            epoch_loss = []
-            epoch_nitems = 0
-            
-            save_dir = Path(model_dir)
-            save_dir.mkdir_p()
-            save_file = save_dir.joinpath(model_prefix + '-model-%i.pth' % epoch)
-            logging.info('TRAIN EPOCH[%i] Saving model to %s' % (epoch, save_file))
-            
-            with open(str(save_file), 'w') as f:
-                torch.save(model, f)
-
-            evaluator(test_loader, test_table, epoch)
-            
-    return run
-    

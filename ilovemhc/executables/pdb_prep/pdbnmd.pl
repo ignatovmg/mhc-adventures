@@ -30,6 +30,8 @@ my $mod;
 my $modid;
 my $lastmodid  = "nan";
 my $firstpatch = "";
+my $lastpatch = "";
+my $defaultpatch = 0;
 
 GetOptions(
     "link=s"        => \$elink,
@@ -38,6 +40,7 @@ GetOptions(
     "prm=s"         => \$eprm,
     "wdir=s"        => \$wdir,
     "first=s"       => \$firstpatch,
+    "last=s"       => \$lastpatch,
     "psfgen=s"      => \$psfgen,
     "nmin=s"        => \$nmin,
     "nsteps=i"      => \$nsteps,
@@ -45,6 +48,7 @@ GetOptions(
     "no-auto-disu"  => sub { $auto_disu = 0 },
     "dont-minimize" => sub { $nsteps = 0; $osuffix = "_ngen" },
     "dont-clean"    => sub { $clean = 0 },
+    "default-patch"    => sub { $defaultpatch = 1 },
     "osuffix:s"     => \$osuffix,
 );
 
@@ -77,6 +81,20 @@ if ($nfpat>1)
     foreach my $fch (@fpat)
     {
        $fpa{$fch} = $pa;
+    }
+}
+
+# process last patch info
+my %lpa;
+
+my @lpat = split( /,/, $lastpatch );
+my $nlpat = @lpat;
+if ($nlpat>1)
+{
+    $pa = shift @lpat;
+    foreach my $lch (@lpat)
+    {
+       $lpa{$lch} = $pa;
     }
 }
 
@@ -218,13 +236,22 @@ foreach my $cho (@chains) {
         $cha = $smod . $cho;
     }
     foreach my $fil (@files) {
-        $pa="NONE";
+        my $paf="NONE";
         if (exists($fpa{$cha}))
         {
-           $pa=$fpa{$cha};
+           $paf=$fpa{$cha};
+        }
+        my $pal="NONE";
+        if (exists($lpa{$cha}))
+        {
+           $pal=$lpa{$cha};
         }
 
-        print OSCRIPT "segment $cha$nfil {first $pa; last NONE; pdb $fil }\n";
+        if ( $defaultpatch == 1 ) {
+            print OSCRIPT "segment $cha$nfil { pdb $fil }\n";
+        } else {
+            print OSCRIPT "segment $cha$nfil {first $paf; last $pal; pdb $fil }\n";
+        }
         $nfil = $nfil + 1;
     }
 }

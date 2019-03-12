@@ -1,0 +1,59 @@
+Chain: two loops
+# problem description
+/gpfs/projects/KozakovGroup/software/brikard/lib
+# path to library (relative or absolute)
+.
+# output directory (default is .)
+./mol.mol2
+# loop, prefix for combined structure (can omit the .mol2 suffix)
+C
+# C: chain
+# R: ring
+
+# (blank): de novo
+# R: relative refinement
+# A: absolute refinement
+0
+# number of kinematic loops
+1
+# number of loops
+182 192
+# beginning and end of loop
+183(N) 183(CA) 187(N) 187(CA) 191(N) 191(CA)
+# pivot residue numbers [may be followed by (atom), e.g,, 1(CA) 2(N) 4(CB)]
+# pivot residue numbers [may be followed by (atom), e.g,, 1(CA) 2(N) 4(CB)]
+182(2) 184 185 186 188 189 190 192(1)
+# residue numbers for sampled residues; if blank, no residues are sampled
+# [may be followed by (torsion1,...), e.g., 1(1,2) 2(1,3) 3(2)]
+
+# backbone loop closure conditions (B = bond, A = angle, T = torsion):
+#    B(n,n+1),         A(n-1,n,n+1),     A(n,n+1,n+2),
+#    T(n-2,n-1,n,n+1), T(n-1,n,n+1,n+2), T(n,n+1,n+2,n+3)
+# If the above are not specified, they will be defaulted/computed.
+0 0.000000001 0.300
+# imeth, acceptable probability, vdW fraction (= 1 - vdW overlap)
+2
+# max_sols: maximal solutions requested
+0
+#  debug level: -1: no output, 0: normal, larger values: lots of output!
+100000000 100 1
+# max_sample
+# max_trials: for automatic operation, need copies of p1.pdb in p1_001.pdb---
+#  -- p1_N.pdb where N = max_trials (3 digit decimal, 000 to 999 max)
+#     but also p1.pdb, p2.pdb must be present (copies of px_001.pdb, x=1,2)
+# rot_sample: number of resamplings of rotamers, to avoid clashes.
+1 0.20
+# initial Sobol seed, Monte Carlo eps_t fraction
+#sBAS
+sBA1
+# String of one-character options to determine various behaviors:
+#    create DCD files:   d
+#    create LOOPS file:  L
+#    create log file:    l
+#    rotamers            T     (none)
+#    torsion sampling:   s,r,q (Sobol_rama, Random_rama, Random)
+#    energy scheme:      S,P,D (Seok, PLOP, Delaunay)
+#    minimize energy:    m,M   (Minimize/write, Minimize/ingest)
+#    Monte Carlo:        C
+#    Ramachandran:       R
+#    sterics:            B,A   (Backbone+, All)

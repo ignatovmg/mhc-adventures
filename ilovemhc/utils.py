@@ -7,11 +7,15 @@ import shutil
 import re
 import logging
 from itertools import product
+import subprocess
+from subprocess import Popen, PIPE, STDOUT
+from path import Path
 
 import Bio
 from Bio.SubsMat import MatrixInfo as matlist
 from Bio.pairwise2 import format_alignment
 from Bio.SeqUtils import seq3
+import prody
 
 import define
 from wrappers import *
@@ -41,9 +45,46 @@ pdb_slices = {'atomi' : slice(6,11),
               'y' : slice(38,46),
               'z' : slice(46,54)}
 
+pdb_formats = {'atomi' : '%5i',
+               'atomn' : '%4s',
+               'resn' : '%3s',
+               'chain' : '%1s',
+               'resi' : '%4i',
+               'x' : '%8.3f',
+               'y' : '%8.3f',
+               'z' : '%8.3f'}
+
+
+#atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}.{22}.\S')
+atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}')
+
+
+def check_atom_record(line):
+    return atom_regex.match(line)
+
+
+def change_atom_record(line, **kwargs):
+    for key, val in kwargs.iteritems():
+        if key == 'atomn':
+            val = '%-3s' % val
+        line = line[:pdb_slices[key].start] + (pdb_formats[key] % val) + line[pdb_slices[key].stop:]
+    return line
+
+
+def get_atom_fields(line, *args):
+    result = []
+    for field in args:
+        x = line[pdb_slices[field]]
+        if field == 'atomi' or field == 'resi':
+            x = int(x)
+        result.append(x)
+    return tuple(result)
+
+
 def global_align(s1, s2):
     aln = Bio.pairwise2.align.globalds(s1, s2, matlist.blosum62, -14.0, -4.0)
     return aln
+
 
 def __get_square_aln_matrix():
     blosum62 = matlist.blosum62
@@ -61,7 +102,9 @@ def __get_square_aln_matrix():
     matrix_square[('-', '-')] = 0
     return matrix_square
 
+
 __aln_matrix_square = __get_square_aln_matrix()
+
 
 def ungapped_score(s1, s2):
     if len(s1) != len(s2):
@@ -71,12 +114,14 @@ def ungapped_score(s1, s2):
         score += __aln_matrix_square[(a1, a2)]
     return score
 
+
 def seq_dist(s1, s2):
     score = ungapped_score(s1, s2)
     n1 = ungapped_score(s1, s1)
     n2 = ungapped_score(s2, s2)
     d = 1.0 - score / np.sqrt(n1*n2)
     return d
+
 
 def get_pseudo_sequence(seq, refseq, resilist):
     aln_matrix = matlist.blosum62
@@ -99,11 +144,14 @@ def get_pseudo_sequence(seq, refseq, resilist):
 
     return ''.join(pseq)
 
+
 def get_pseudo_sequence_nielsen(seq):
     return get_pseudo_sequence(seq, nielsen_ref_seq, nielsen_residue_set)
 
+
 def get_pseudo_sequence_custom(seq):
     return get_pseudo_sequence(seq, custom_ref_seq, contacting_set)
+
 
 def convert_allele_name(allele):
     new = allele.split()
@@ -114,17 +162,20 @@ def convert_allele_name(allele):
     return new
 
 
-def split_models(path, outdir, add_rec=None):
+def split_models(path, outdir, add_rec=None, mdl_format='%06i'):
     if add_rec:
         with open(add_rec, 'r') as f:  
             rec_lines = [x for x in f if x.startswith('ATOM') or x.startswith('HETATM')]
             first_atom = int(rec_lines[-1][6:11]) + 1
             rec_text = ''.join(rec_lines)
-    
+
+    mdl_count = 0
     with open(path, 'r') as f:
         for line in f:
             if line.startswith('MODEL'):
-                name = os.path.join(outdir, line.split()[1] + '.pdb')
+                mdl_count += 1
+                # name = os.path.join(outdir, (mdl_format + '.pdb') % int(line.split()[1]))
+                name = os.path.join(outdir, (mdl_format + '.pdb') % int(mdl_count))
                 f = open(name, 'w')
                 if add_rec:
                     counter = 0
@@ -138,25 +189,171 @@ def split_models(path, outdir, add_rec=None):
                 atom_id = first_atom + counter
                 line = line[:6] + '%5i' % atom_id + line[11:]
                 counter += 1
-                
+                 
             f.write(line)
+
             
+def pdb_to_slices(pdb):
+    slices = []
+    with open(pdb, 'r') as f:
+        limit = [None, None]
+        
+        for i, line in enumerate(f):
+            if line.startswith('MODEL'):
+                limit[0] = i
+                
+            if line.startswith('END'):
+                limit[1] = i + 1
+                
+            if limit[1]:
+                if not limit[0]:
+                    limit[0] = slices[-1].stop if slices else 0
+                
+                slices.append(slice(*limit))
+                limit = [None, None]
+             
+        if not slices:
+            slices.append(slice(0, i+1))
+
+    return slices
+
+
+def reduce_pdb(pdb, save=None, input_is_path=True, trim_first=True, remove_user_info=True):
+    if input_is_path:
+        with open(pdb, 'r') as f:
+            pdb_lines = f.readlines()
+    else:
+        pdb_lines = pdb
+    
+    if trim_first:
+        p_start = Popen([define.REDUCE_EXE, '-Quiet', '-Trim', '-'], stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+        p_finish = Popen([define.REDUCE_EXE, '-Quiet', '-FLIP', '-'], stdin=p_start.stdout, stdout=PIPE, stderr=STDOUT)
+    else:
+        p_start = Popen([define.REDUCE_EXE, '-Quiet', '-FLIP', '-'], stdin=PIPE, stdout=PIPE, stderr=STDOUT)
+        p_finish = p_start
+        
+    for line in pdb_lines:
+        p_start.stdin.write(line)
+        
+    p_start.stdin.close()
+    
+    output = []
+    while p_finish.poll() is None:
+        output += p_finish.stdout.readlines()
+    
+    status = p_finish.poll()
+    
+    if status != 0:
+        logging.error('Called process returned ' + str(status))
+        # raise RuntimeError('Called process returned ' + str(status))
+        
+    if remove_user_info:
+        output = filter(lambda x: not x.startswith('USER'), output)
+        
+    output = renumber_pdb(None, output)
+        
+    if save:
+        with open(save, 'w') as f:
+            f.write(''.join(output))
+        return
+        
+    return output
+    
+        
 def hsd2his(path, out=None):
     if out:
-        call = 'sed "s/HSD/HIS/g" %s > %s' % (path, out)
+        call = 'sed "s/HSD/HIS/g; s/HSE/HIS/g; s/HSP/HIS/g" %s > %s' % (path, out)
     else:
-        call = 'sed -i "s/HSD/HIS/g" %s' % path
+        call = 'sed -i "s/HSD/HIS/g; s/HSE/HIS/g; s/HSP/HIS/g" %s' % path
         
-    return os.system(call)
+    return shell_call(call, shell=True)
+
 
 def his2hsd(path, out=None):
-    if out:
-        call = 'sed "s/HIS/HSD/g" %s > %s' % (path, out)
-    else:
-        call = 'sed -i "s/HIS/HSD/g" %s' % path
+    parsed = prody.parsePDB(path)
+    new_res_dict = {}
+    his = parsed.select('resname HIS and name CA')
+
+    if his is not None:
+        his_list = zip(his.getResnums(), his.getChids())
+
+        for resi, chain in his_list:
+            his_res = parsed.select('resname HIS and resnum {} and chain {}'.format(resi, chain))
+            atom_list = his_res.getNames()
+            if 'HE2' in atom_list:
+                if 'HD1' in atom_list:
+                    new_resn = 'HSP'
+                else:
+                    new_resn = 'HSE'
+            else:
+                new_resn = 'HSD'
+            new_res_dict[(chain, resi)] = new_resn
+
+    if not out:
+        out = path
+
+    # Not using prody writer, because I want to keep other records in pdb as well
+    with open(path, 'r') as f:
+        lines = f.readlines()
+
+    with open(out, 'w') as o:
+        for line in lines:
+            if line.startswith('ATOM'):
+                key = get_atom_fields(line, 'chain', 'resi')
+                resn = new_res_dict.get(key, None)
+                if resn:
+                    o.write(change_atom_record(line, resn=resn))
+                    continue
+            o.write(line)
+
+
+def _his2hsd_old(path, out=None):
+    # deprecated
+    with open(path, 'r') as f:
+        lines = f.readlines()
+    if not out:
+        out = path
+    
+    resn_s = pdb_slices['resn']
+    resi_s = pdb_slices['resi']
+    atomn_s = pdb_slices['atomn']
+    resi_prev = None
+    
+    def change_his(lines, start, end):
+        atomn_list = [x[atomn_s].strip() for x in lines[start:end]]
+        if 'HE2' in atomn_list:
+            if 'HD1' in atomn_list:
+                new_resn = 'HSP'
+            else:
+                new_resn = 'HSE'
+        else:
+            new_resn = 'HSD'
         
-    return os.system(call)
+        for i in range(start, end):
+            lines[i] = change_atom_record(lines[i], resn=new_resn)
+        
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            if line[resn_s] == 'HIS':
+                resi = line[resi_s]
+                if resi != resi_prev:
+                    if start:
+                        change_his(lines, start, end)
+                    start = i
+                    resi_prev = resi
+                end = i+1
+                
+    # change last HIS
+    if start is not None:
+        change_his(lines, start, end)
             
+    with open(out, 'w') as f:
+        f.writelines(lines)
+        
+    return
+
+
 def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=False):
     pdb = save_file
 
@@ -195,58 +392,169 @@ def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=Fals
             
     f.write('END\n')
     f.close()
-    
-def renumber_pdb(save_file, pdb):
-    atom_i = pdb_slices['atomi']
-    counter = 1
-    with open(pdb, 'r') as f, open(save_file, 'w') as o:
-        for line in f:
-            new_line = line
-            if line.startswith('ATOM') or line.startswith('HETATM'):
-                new_line = line[:atom_i.start] + '%5i' % counter + line[atom_i.stop:]
-                counter += 1
-            o.write(new_line)
 
-def prepare_pdb22(pdb, out_prefix, rtf=define.RTF22_FILE, prm=define.PRM22_FILE, change_his=True, remove_tmp=True):
-    pwd = os.getcwd()
+
+# can be pdb path or list of lines
+def renumber_pdb(save_file, pdb, keep_resi=True):
+    counter = 1
     
-    dirname = os.path.dirname(pdb)
-    if not dirname:
-        dirname = '.'
-        
-    basename = os.path.basename(pdb)
-    os.chdir(dirname)
-    
-    tmp_file = (basename[:-4] + '-tmp.pdb').lower() #tmp_file_name('.pdb')
-    
-    if change_his:
-        his2hsd(basename, tmp_file)
+    if isinstance(pdb, str) or isinstance(pdb, Path):
+        with open(pdb, 'r') as f:
+            lines = f.readlines()
     else:
-        shutil.copyfile(basename, tmp_file)
-    
-    call = [define.PDBPREP_EXE, tmp_file]
-    shell_call(call)
-    
-    call = [define.PDBNMD_EXE, tmp_file, '--rtf=%s' % rtf, '--prm=%s' % prm, '?']
-    shell_call(call)
-    
-    nmin = tmp_file[:-4] + '_nmin.pdb'
-    psf = tmp_file[:-4] + '_nmin.psf'
-    file_is_empty_error(nmin)
-    
-    outnmin = os.path.join(pwd, out_prefix + '_nmin.pdb')
-    outpsf = os.path.join(pwd, out_prefix + '_nmin.psf')
-    os.rename(nmin, outnmin)
-    os.rename(psf, outpsf)
-    
-    if remove_tmp:
-        files = tmp_file[:-4] + '-*.????.pdb'
-        call = ['rm', '-f'] + glob.glob(files) + [tmp_file]
-        shell_call(call)
+        lines = list(pdb)
         
-    os.chdir(pwd)
-    return outnmin, outpsf
+    new_lines = []
+
+    prev_resi = None
+    prev_chain = None
+    new_resi = 0
+
+    for line in lines:
+        new_line = line
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            resi, chain = int(line[pdb_slices['resi']]), line[pdb_slices['chain']]
+
+            if resi != prev_resi:
+                new_resi += 1
+                prev_resi = resi
+
+            if chain != prev_chain:
+                new_resi = 1
+                prev_chain = chain
+
+            if not keep_resi:
+                new_line = change_atom_record(line, atomi=counter, resi=new_resi)
+            else:
+                new_line = change_atom_record(line, atomi=counter)
+            counter += 1
+        new_lines.append(new_line)
+
+    if save_file:
+        with open(save_file, 'w') as o:
+            o.write(''.join(new_lines))
+        return 
     
+    return new_lines
+
+
+def match_ref_pdb(pdb, ref, out=None, atom_name_mapping=None):
+    pdb = Path(pdb)
+    ref = Path(ref)
+
+    models_pdb_slices = pdb_to_slices(pdb)
+    models_ref_slices = pdb_to_slices(ref)
+    assert(len(models_ref_slices) == 1)
+    assert(len(set([x.stop - x.start for x in models_pdb_slices])) == 1)
+
+    if not out:
+        out = pdb[:-4] + '_matched.pdb'
+    out = Path(out)
+
+    with open(pdb, 'r') as p, open(ref, 'r') as r:
+        models_lines = p.readlines()
+        ref_lines = r.readlines()
+
+    first_model_lines = models_lines[models_pdb_slices[0]]
+    chain_s, resi_s, resn_s, atomn_s = pdb_slices['chain'], pdb_slices['resi'], pdb_slices['resn'], pdb_slices['atomn']
+
+    first_model_order = []
+    for i, line in enumerate(first_model_lines):
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            atomn = line[atomn_s]
+            if atom_name_mapping:
+                atomn = atom_name_mapping[atomn]
+            atom = (line[chain_s], line[resi_s], line[resn_s], atomn)
+            first_model_order.append((atom, i))
+    first_model_order = zip(*first_model_order)
+    first_model_order = pd.Series(first_model_order[1], index=first_model_order[0])
+
+    ref_order = []
+    for i, line in enumerate(ref_lines):
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            atom = (line[chain_s], line[resi_s], line[resn_s], line[atomn_s])
+            ref_order.append(atom)
+
+    diff = set(list(first_model_order.index)) ^ set(ref_order)
+    if diff:
+        raise RuntimeError('Matching atoms in the rest of the models failed:\n%s' % str(diff))
+
+    old_order = first_model_order.values
+    new_order = first_model_order[ref_order].values
+
+    with open(out, 'w') as f:
+        for model in models_pdb_slices:
+            lines = pd.Series(models_lines[model])
+            lines[old_order] = lines[new_order].values
+            lines = renumber_pdb(None, lines.sort_index().values)
+            f.writelines(lines)
+            
+
+def prepare_pdb22(pdb,
+                  out_prefix,
+                  rtf=define.RTF22_FILE,
+                  prm=define.PRM22_FILE,
+                  change_his=True,
+                  remove_tmp=True, 
+                  patch_termini=True):
+
+    #parsed = prody.parsePDB(pdb)
+    #parsed.
+
+    pwd = os.getcwd()
+    try:
+
+        pdb = Path(pdb).abspath()
+        dirname = pdb.dirname()
+
+        rtf = Path(rtf).abspath()
+        prm = Path(prm).abspath()
+
+        basename = pdb.basename()
+        os.chdir(dirname)
+
+        tmp_file = (basename[:-4] + '-tmp.pdb').lower() #tmp_file_name('.pdb')
+
+        if change_his:
+            his2hsd(basename, tmp_file)
+        else:
+            shutil.copyfile(basename, tmp_file)
+
+        call = [define.PDBPREP_EXE, tmp_file]
+        shell_call(call)
+
+        call = [define.PDBNMD_EXE, tmp_file, '--rtf=%s' % rtf, '--prm=%s' % prm]
+        #if patch_chains:
+        #    call += ['--first', ','.join(['nter'] + [x.lower() for x in patch_chains])]
+        #    call += ['--last',  ','.join(['cter'] + [x.lower() for x in patch_chains])]
+        if patch_termini:
+            call += ['--default-patch']
+
+        call += ['?']
+        shell_call(call)
+
+        nmin = tmp_file[:-4] + '_nmin.pdb'
+        psf = tmp_file[:-4] + '_nmin.psf'
+        file_is_empty_error(nmin)
+
+        outnmin = os.path.join(pwd, out_prefix + '_nmin.pdb')
+        outpsf = os.path.join(pwd, out_prefix + '_nmin.psf')
+        os.rename(nmin, outnmin)
+        os.rename(psf, outpsf)
+
+        if remove_tmp:
+            files = tmp_file[:-4] + '-*.????.pdb'
+            call = ['rm', '-f'] + glob.glob(files) + [tmp_file]
+            shell_call(call)
+    except:
+        os.chdir(pwd)
+        raise
+    
+    os.chdir(pwd)
+    
+    return outnmin, outpsf
+
+
 def get_backbone_coords(pdb, nres):
     names = ['N', 'C', 'CA', 'CB', 'O']
 
@@ -303,7 +611,7 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
         try:
             crd2 = crds2[key]
         except KeyError as e:
-            logging.warning('Key Error (%s, %s): ' % (pdb1,pdb2) + str(e))
+            logging.warning('Key Error (%s, %s): ' % (pdb1, pdb2) + str(e))
             continue
 
         if not np.isnan(crd2).any():
@@ -311,6 +619,7 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
             n += 1
     rmsd = np.sqrt(rmsd / n)
     return rmsd
+
 
 def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
     bb_names = ['CA', 'N', 'CB', 'O', 'C']
@@ -332,13 +641,14 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
     refcrd = dict(refcrds)
 
     lines = []
-    id = 1
+    id = 0
     result = []
     with open(models, 'r') as f:
         for line in f.readlines():
             if line.startswith('MODEL'):
                 lines = []
-                id = line.split()[1]
+                #id = line.split()[1]
+                id += 1
                 continue
                 
             if line.startswith('ATOM') or line.startswith('HETATM'):
@@ -359,7 +669,7 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                     logging.warning('Invalid coordinates in %s' % id)
                     continue
                 
-                label  = map(str.strip, [line[12:16], line[17:20], line[22:26]])
+                label = map(str.strip, [line[12:16], line[17:20], line[22:26]])
                 lines.append((tuple(label), coords))
                 
             if line.startswith('END'):
@@ -372,16 +682,16 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                         #print crd1, crd2
                         rmsd += ((crd1 - crd2)**2).sum()
                         n += 1
-                    else:   
+                    else:
                         logging.warning('Model %s Warning: atom %s is not in the reference molecule' % (id, str(label)))
                 if n == 0:
                     logging.error('Model %s Error: n = 0' % id)
-                    continue #sys.exit(1)
+                    continue
                 rmsd = np.sqrt(rmsd/n)
-                #print('%s %.3f' % (id, rmsd))
                 result.append((id, rmsd))
                 lines = []
     return result
+
 
 def compute_generic_distance_matrix(plist, dfunc):
     dmat = np.zeros((len(plist), len(plist)))
@@ -392,8 +702,10 @@ def compute_generic_distance_matrix(plist, dfunc):
             dmat[j, i] = val
     return dmat
 
+
 def compute_backbone_distance_matrix(plist):
     return compute_generic_distance_matrix(plist, peptide_calc_bb_rsmd)
+
 
 def compute_sequence_matrix(seq_list):
     return compute_generic_distance_matrix(seq_list, seq_dist)

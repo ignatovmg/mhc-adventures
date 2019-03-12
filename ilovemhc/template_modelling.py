@@ -189,7 +189,7 @@ class TemplateModeller():
     
     def create_model(self, savepath, mhcseq, pepseq, add_h=True, charmm22=True, scwrl=True):
         if savepath[-4:] != '.pdb':
-            throw_error('Output file must have ".pdb" extension')
+            raise RuntimeError('Output file must have ".pdb" extension')
         
         pdb = self.pick_template(mhcseq, pepseq)
         logging.info('TEMPLATE: %s' % pdb)

@@ -23,20 +23,19 @@
 
 #define FUN2(d, r) (1./(E*E) * ( 4.*((d)*(d)/((r)*(r)) ) - 12.*(d)/(r) + 9.))
 
-#define MYFREE(x) {\
-    free(x);       \
-    x = NULL;      \
+#define MYFREE(x) {  \
+    free(x);         \
+    x = NULL;        \
 }
 
 #define MAX(x, y) (x) >= (y) ? (x) : (y)
-
 #define MIN(x, y) (x) <= (y) ? (x) : (y)
 
 #define STRINGIZE(X) #X
 #define TOSTRING(X) STRINGIZE(X)
-#define MSG_ERR(...) {                                                                    \
+#define MSG_ERR(...) {                                                         \
     sprintf(err, __FILE__ ", line " TOSTRING(__LINE__) ": " __VA_ARGS__);      \
-    PyErr_SetString(MolgridError, err);                                                   \
+    PyErr_SetString(MolgridError, err);                                        \
 }
 
 static PyObject *MolgridError;
@@ -51,7 +50,7 @@ static int get_element_index(char* channels, char val) {
 }
 
 //static std::vector<float> 
-float*
+static float*
 compute_grid(const char* pdb_file, 
             const char* type2properties_file, 
             const char* name2type_file, 

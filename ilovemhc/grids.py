@@ -7,6 +7,9 @@ import logging
 
 from itertools import product
 
+from gridData import Grid
+from path import Path
+
 import utils
 import define
 import molgrid
@@ -176,6 +179,26 @@ class GridMaker():
                             (xyz[0], xyz[1], xyz[2], ele)
                         f.write(line)
                 f.write('END\n')
+                
+    def grid_to_dx(self, save_dir, grid, bin_size, channel=None, use_channel_names=False):
+        origin = np.array([7.473, 4.334, 7.701]) - 5.0;
+        
+        if grid.shape[0] % 2 != 0:
+            raise ValueError('Number of channels must be even (%i)' % grid.shape[0])
+            
+        ch_per_mol = grid.shape[0] / 2
+        for shift, prefix in [(0, 'rec'), (ch_per_mol, 'lig')]:
+            for ch in range(ch_per_mol):
+                ch += shift
+                if use_channel_names:
+                    names = self.prop_table.columns[1:]
+                    names *= 2
+                    channel_name = names[ch]
+                else:
+                    channel_name = str(ch)
+                    
+                g = Grid(grid[ch], origin=np.array([7.473, 4.334, 7.701]) - 5.0, delta=bin_size) 
+                g.export(Path(save_dir).joinpath(channel_name + '.dx'), 'DX')
                 
     def draw_grid_in_jupyter_notebook(self, grid, channel, thre):
         from IPython.display import Image
