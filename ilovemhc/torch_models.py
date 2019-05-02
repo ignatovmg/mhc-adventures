@@ -28,6 +28,7 @@ def load_model(model, saved_model_path, cpu=True, strip_keys=False):
     model.load_state_dict(model_state_dict)
     return model
 
+
 class ModelTemplate(nn.Module):
     def __init__(self):
         nn.Module.__init__(self)
@@ -65,7 +66,6 @@ class ModelTemplate(nn.Module):
 #
 #                               Model3
 #
-
 class Model1(nn.Module):
     def __init__(self, input_shape):
         nn.Module.__init__(self)
@@ -459,12 +459,12 @@ class BasicBlock(nn.Module):
 
         return out
 
+
 class ResNet(nn.Module):
-    def __init__(self, in_shape, block=BasicBlock, layers=[2,2,2,2], num_classes=1, zero_init_residual=False):
+    def __init__(self, in_shape, block=BasicBlock, layers=[3, 4, 6, 3], num_classes=1, zero_init_residual=False):
         super(ResNet, self).__init__()
         
         self.in_shape = in_shape
-        
         self.inplanes = 64
         self.conv1 = nn.Conv3d(in_shape[0], 64, kernel_size=5, stride=2, padding=2, bias=False)
         self.bn1 = nn.BatchNorm3d(64)
@@ -546,7 +546,20 @@ class ResNet(nn.Module):
         
         x = torch.sigmoid(x)
         return x
-    
+
+
+def ResNet34(in_shape, **kwargs):
+    return ResNet(in_shape, layers=[3, 4, 6, 3], **kwargs)
+
+
+def ResNet101(in_shape, **kwargs):
+    return ResNet(in_shape, layers=[3, 4, 23, 3], **kwargs)
+
+
+def ResNet152(in_shape, **kwargs):
+    return ResNet(in_shape, layers=[3, 8, 36, 3], **kwargs)
+
+
 # old model    
 class ModelClass_Probe(nn.Module):
     def __init__(self, input_shape):
@@ -602,7 +615,7 @@ class ModelClass_Probe(nn.Module):
         x = self.fc3(x)
         x = torch.sigmoid(x)
         return x
-    
+
 # ======================= Regularization Testing =======================   
 class RegModel1(ModelTemplate):
     def __init__(self, input_shape):
@@ -640,7 +653,8 @@ class RegModel1(ModelTemplate):
         self._init_weights()
         #map(_init_fun, self.conv)
         #map(_init_fun, self.fc)
-    
+
+
 # removing leading batchnorm
 class RegModel2(ModelTemplate):
     def __init__(self, input_shape):

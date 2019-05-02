@@ -20,43 +20,45 @@ import prody
 import define
 from wrappers import *
 
-nielsen_residue_set = [7, 9, 24, 45, 59, 62, 63, 66, 67, 
-            69, 70, 73, 74, 76, 77, 80, 81, 
-            84, 95, 97, 99, 114, 116, 118, 143, 
-            147, 150, 152, 156, 158, 159, 163, 167, 171]
+nielsen_residue_set = [7, 9, 24, 45, 59, 62, 63, 66, 67, 69, 70, 73, 74, 76, 77, 80, 81, 84, 95, 97, 99, 114, 116, 118,
+                       143, 147, 150, 152, 156, 158, 159, 163, 167, 171]
 
 # HLA-A*01:01:01:01
-nielsen_ref_seq = 'GSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQKMEPRAPWIEQEGPEYWDQETRNMKAHSQTDRANLGTLRGYYNQSEDGSHTIQIMYGCDVGPDGRFLRGYRQDAYDGKDYIALNEDLRSWTAADMAAQITKRKWEAVHAAEQRRVYLEGRCVDGLRRYLENGKETLQRTDPPKTHMTHHPISDHEATLRCWALGFYPAEITLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGEEQRYTCHVQHEGLPKPLTLRWELSSQPTIPIVGIIAGLVLLGAVITGAVVAAVMWRRKSSDRKGGSYTQAASSDSAQGSDVSLTACKV'
+nielsen_ref_seq = 'GSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQKMEPRAPWIEQEGPEYWDQETRNMKAHSQTDRANLGTLRGYYNQSEDGSHTIQIMYG\
+CDVGPDGRFLRGYRQDAYDGKDYIALNEDLRSWTAADMAAQITKRKWEAVHAAEQRRVYLEGRCVDGLRRYLENGKETLQRTDPPKTHMTHHPISDHEATLRCWALGFYPAEITLTWQR\
+DGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGEEQRYTCHVQHEGLPKPLTLRWELSSQPTIPIVGIIAGLVLLGAVITGAVVAAVMWRRKSSDRKGGSYTQAASSDSAQGSDVSLTA\
+CKV'
 
-contacting_set = [7, 9, 22, 24, 36, 45, 55, 58, 59, 62, 63, 65, 66, 67, 69, 
-              70, 72, 73, 74, 76, 77, 80, 81, 84, 95, 96, 97, 99, 114, 
-              116, 117, 118, 123, 124, 133, 143, 144, 146, 147, 148, 150, 
-              151, 152, 153, 155, 156, 157, 159, 160, 163, 164, 167, 168, 170, 171, 172]
+contacting_set = [7, 9, 22, 24, 36, 45, 55, 58, 59, 62, 63, 65, 66, 67, 69, 70, 72, 73, 74, 76, 77, 80, 81, 84, 95, 96,
+                  97, 99, 114, 116, 117, 118, 123, 124, 133, 143, 144, 146, 147, 148, 150, 151, 152, 153, 155, 156, 157,
+                  159, 160, 163, 164, 167, 168, 170, 171, 172]
 
 # pdb: 1ao7
-custom_ref_seq = 'GSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGYYNQSEAGSHTVQRMYGCDVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMAAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQR'
+custom_ref_seq = 'GSHSMRYFFTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDGETRKVKAHSQTHRVDLGTLRGYYNQSEAGSHTVQRMYGC\
+DVGSDWRFLRGYHQYAYDGKDYIALKEDLRSWTAADMAAQTTKHKWEAAHVAEQLRAYLEGTCVEWLRRYLENGKETLQR'
 
-pdb_slices = {'atomi' : slice(6,11),
-              'atomn' : slice(12,16),
-              'resn' : slice(17,20),
-              'chain' : slice(21,22),
-              'resi' : slice(22,26),
-              'x' : slice(30,38),
-              'y' : slice(38,46),
-              'z' : slice(46,54)}
+pdb_slices = {'atomi': slice(6, 11),
+              'atomn': slice(12, 16),
+              'resn': slice(17, 20),
+              'chain': slice(21, 22),
+              'resi': slice(22, 26),
+              'x': slice(30, 38),
+              'y': slice(38, 46),
+              'z': slice(46, 54)}
 
-pdb_formats = {'atomi' : '%5i',
-               'atomn' : '%4s',
-               'resn' : '%3s',
-               'chain' : '%1s',
-               'resi' : '%4i',
-               'x' : '%8.3f',
-               'y' : '%8.3f',
-               'z' : '%8.3f'}
+pdb_formats = {'atomi': '%5i',
+               'atomn': '%4s',
+               'resn': '%3s',
+               'chain': '%1s',
+               'resi': '%4i',
+               'x': '%8.3f',
+               'y': '%8.3f',
+               'z': '%8.3f'}
 
-
-#atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}.{22}.\S')
-atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}')
+# atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3
+# }[ \-0-9]{4}\.[0-9]{3}.{22}.\S')
+atom_regex = re.compile('^ATOM {2}[0-9 ]{5} .{4}.[A-Z]{3} [A-Z][0-9 ]{4}. {3}[ \-0-9]{4}\.[0-9]{3}[ \-0-9]{4}\.[0-9]{3}\
+[ \-0-9]{4}\.[0-9]{3}')
 
 
 def check_atom_record(line):
@@ -71,14 +73,24 @@ def change_atom_record(line, **kwargs):
     return line
 
 
-def get_atom_fields(line, *args):
+def get_atom_fields(line, *args, **kwargs):
     result = []
+    strip_flag = kwargs.get('strip', False)
+
     for field in args:
         x = line[pdb_slices[field]]
         if field == 'atomi' or field == 'resi':
             x = int(x)
+        elif field == 'x' or field == 'y' or field == 'z':
+            x = float(x)
+        elif strip_flag:
+            x = x.strip()
         result.append(x)
-    return tuple(result)
+
+    if len(result) == 1:
+        return result[0]
+    else:
+        return tuple(result)
 
 
 def global_align(s1, s2):
@@ -110,7 +122,7 @@ def ungapped_score(s1, s2):
     if len(s1) != len(s2):
         return np.nan
     score = 0.0
-    for a1,a2 in zip(s1, s2):
+    for a1, a2 in zip(s1, s2):
         score += __aln_matrix_square[(a1, a2)]
     return score
 
@@ -162,38 +174,106 @@ def convert_allele_name(allele):
     return new
 
 
-def split_models(path, outdir, add_rec=None, mdl_format='%06i'):
-    if add_rec:
-        with open(add_rec, 'r') as f:  
-            rec_lines = [x for x in f if x.startswith('ATOM') or x.startswith('HETATM')]
-            first_atom = int(rec_lines[-1][6:11]) + 1
-            rec_text = ''.join(rec_lines)
+def split_models(path, outdir, mdl_format='%06i'):
+    path = Path(path)
+    outdir = Path(outdir)
+    slices = pdb_to_slices(path)
 
-    mdl_count = 0
     with open(path, 'r') as f:
-        for line in f:
-            if line.startswith('MODEL'):
-                mdl_count += 1
-                # name = os.path.join(outdir, (mdl_format + '.pdb') % int(line.split()[1]))
-                name = os.path.join(outdir, (mdl_format + '.pdb') % int(mdl_count))
-                f = open(name, 'w')
-                if add_rec:
-                    counter = 0
-                    f.write(rec_text)
+        lines = f.readlines()
+
+    model_list = []
+    for mdl_count, s in enumerate(slices, 1):
+        mdl_lines = lines[s]
+        name = outdir.joinpath((mdl_format + '.pdb') % mdl_count)
+
+        if mdl_lines[-1].startswith('ENDMDL'):
+            mdl_lines[-1] = 'END\n'
+
+        name.write_text(''.join(mdl_lines))
+        model_list.append(name)
+
+    return model_list
+
+
+def assemble_models(pdb_list, out, remove=False):
+    with open(out, 'w') as f:
+        for i, pdb in enumerate(pdb_list, 1):
+            with open(pdb, 'r') as r:
+                lines = filter(lambda x: not (x.startswith('MODEL') or x.startswith('END')), r)
+                f.write(''.join(['MODEL %i\n' % i] + lines + ['ENDMDL\n']))
+            if remove:
+                pdb.remove()
+    return out
+
+
+def pdb_to_slices(pdb):  # TODO: fails if MODEL is the last record
+    mdl_lines = []
+    end_lines = []
+
+    if isinstance(pdb, str) or isinstance(pdb, Path):
+        with open(pdb, 'r') as f:
+            lines = f.readlines()
+    else:
+        lines = list(pdb)
+
+    for linei, line in enumerate(lines):
+        if line.startswith('MODEL'):
+            mdl_lines.append(linei)
+
+        if line.startswith('END'):
+            end_lines.append(linei)
+
+    slices = []
+    if not mdl_lines:
+        if end_lines:
+            if len(end_lines) > 1:
+                logging.warning('Multiple models found, but no MODEL records')
+                start = 0
+                for end in end_lines:
+                    slices.append(slice(start, end + 1))
+                    start += end + 1
+            else:
+                slices.append(slice(0, end_lines[0] + 1))
+        else:
+            logging.warning('Warning no END record found')
+            slices.append(slice(0, linei + 1))
+    else:
+        if len(mdl_lines) != len(end_lines):
+            logging.warning('Warning # of MODEL records != # of ENDMDL records')
+            if len(end_lines) == 0:
+                logging.warning('Warning no ENDMDL records are present at all')
+
+        mi = 0
+        ei = 0
+        last = None
+        while mi < len(mdl_lines) or ei < len(end_lines):
+            mdl = mdl_lines[min(mi, len(mdl_lines) - 1)]
+            end = end_lines[ei]
+
+            if last is None:
+                last = (mdl, 'mdl')
+                mi += 1
                 continue
-            if line.startswith('END'):
-                f.write('END\n')
-                f.close()
-                continue
-            if add_rec and (line.startswith('ATOM') or line.startswith('HETATM')):
-                atom_id = first_atom + counter
-                line = line[:6] + '%5i' % atom_id + line[11:]
-                counter += 1
-                 
-            f.write(line)
+
+            if mdl < end and mi < len(mdl_lines):
+                if last[1] == 'mdl':
+                    logging.warning('Warning no terminal END is found for MODEL record: line %i. Skipping model' % mdl)
+
+                last = (mdl, 'mdl')
+                mi += 1
+            else:
+                if last[1] == 'mdl':
+                    slices.append(slice(last[0], end + 1))
+                else:
+                    logging.error('Error no MODEL record found between 2 END records: (line %i - line %i). Skipping model' % (last[0], end))
+                last = (end, 'end')
+                ei += 1
+
+    return slices
 
             
-def pdb_to_slices(pdb):
+def _pdb_to_slices_old(pdb):
     slices = []
     with open(pdb, 'r') as f:
         limit = [None, None]
@@ -255,18 +335,19 @@ def reduce_pdb(pdb, save=None, input_is_path=True, trim_first=True, remove_user_
     if save:
         with open(save, 'w') as f:
             f.write(''.join(output))
-        return
+        return save
         
     return output
-    
+
         
 def hsd2his(path, out=None):
     if out:
         call = 'sed "s/HSD/HIS/g; s/HSE/HIS/g; s/HSP/HIS/g" %s > %s' % (path, out)
     else:
         call = 'sed -i "s/HSD/HIS/g; s/HSE/HIS/g; s/HSP/HIS/g" %s' % path
-        
-    return shell_call(call, shell=True)
+
+    shell_call(call, shell=True)
+    return out
 
 
 def his2hsd(path, out=None):
@@ -280,13 +361,14 @@ def his2hsd(path, out=None):
         for resi, chain in his_list:
             his_res = parsed.select('resname HIS and resnum {} and chain {}'.format(resi, chain))
             atom_list = his_res.getNames()
-            if 'HE2' in atom_list:
-                if 'HD1' in atom_list:
+            if 'HD1' in atom_list:
+                if 'HE2' in atom_list:
                     new_resn = 'HSP'
                 else:
-                    new_resn = 'HSE'
+                    new_resn = 'HSD'
             else:
-                new_resn = 'HSD'
+                new_resn = 'HSE'
+
             new_res_dict[(chain, resi)] = new_resn
 
     if not out:
@@ -305,6 +387,8 @@ def his2hsd(path, out=None):
                     o.write(change_atom_record(line, resn=resn))
                     continue
             o.write(line)
+
+    return out
 
 
 def _his2hsd_old(path, out=None):
@@ -355,7 +439,7 @@ def _his2hsd_old(path, out=None):
 
 
 def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=False):
-    pdb = save_file
+    pdb = Path(save_file)
 
     with open(pdb1, 'r') as f:
         lines1 = f.readlines()
@@ -393,101 +477,169 @@ def merge_two(save_file, pdb1, pdb2, keep_chain=False, keep_residue_numbers=Fals
     f.write('END\n')
     f.close()
 
+    return save_file
+
 
 # can be pdb path or list of lines
-def renumber_pdb(save_file, pdb, keep_resi=True):
-    counter = 1
-    
+def renumber_pdb(save_file, pdb, keep_resi=True, keep_chain=True):
     if isinstance(pdb, str) or isinstance(pdb, Path):
         with open(pdb, 'r') as f:
             lines = f.readlines()
     else:
         lines = list(pdb)
-        
     new_lines = []
 
-    prev_resi = None
-    prev_chain = None
-    new_resi = 0
+    slices = pdb_to_slices(pdb)
+    for s in slices:
+        prev_resi = None
+        prev_chain = None
+        new_resi = 0
+        counter = 1
 
-    for line in lines:
-        new_line = line
-        if line.startswith('ATOM') or line.startswith('HETATM'):
-            resi, chain = int(line[pdb_slices['resi']]), line[pdb_slices['chain']]
+        for line in lines[s]:
+            new_line = line
+            if line.startswith('ATOM') or line.startswith('HETATM'):
+                if not keep_resi:
+                    resi, chain = get_atom_fields(line, 'resi', 'chain')
 
-            if resi != prev_resi:
-                new_resi += 1
-                prev_resi = resi
+                    if resi != prev_resi:
+                        new_resi += 1
+                        prev_resi = resi
 
-            if chain != prev_chain:
-                new_resi = 1
-                prev_chain = chain
-
-            if not keep_resi:
-                new_line = change_atom_record(line, atomi=counter, resi=new_resi)
-            else:
-                new_line = change_atom_record(line, atomi=counter)
-            counter += 1
-        new_lines.append(new_line)
+                    if not keep_chain:
+                        new_line = change_atom_record(line, atomi=counter, resi=new_resi, chain='A')
+                    else:
+                        if chain != prev_chain:
+                            new_resi = 1
+                            prev_chain = chain
+                        new_line = change_atom_record(line, atomi=counter, resi=new_resi)
+                else:
+                    new_line = change_atom_record(line, atomi=counter)
+                counter += 1
+            new_lines.append(new_line)
 
     if save_file:
+        save_file = Path(save_file)
         with open(save_file, 'w') as o:
             o.write(''.join(new_lines))
-        return 
+        return save_file
     
     return new_lines
 
 
-def match_ref_pdb(pdb, ref, out=None, atom_name_mapping=None):
+def match_lines(lines, ref_lines):
+    old_order = []
+    for i, line in enumerate(lines):
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            atom = get_atom_fields(line, 'chain', 'resi', 'resn', 'atomn')
+            old_order.append((atom, i))
+    old_order = zip(*old_order)
+    old_order = pd.Series(old_order[1], index=old_order[0])
+
+    ref_order = []
+    for i, line in enumerate(ref_lines):
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            atom = get_atom_fields(line, 'chain', 'resi', 'resn', 'atomn')
+            ref_order.append(atom)
+
+    diff = set(list(old_order.index)) ^ set(ref_order)
+    if diff:
+        raise RuntimeError('Matching atoms in the first model failed:\n%s' % str(diff))
+
+    new_order = old_order[ref_order].values
+    old_order = old_order.values
+    return old_order, new_order
+
+
+def match_by_residue_position(pdb, ref, out=None, order_by=None):
+    """
+    Matches atom names to the reference residuewise
+    :param pdb:
+    :param ref:
+    :return:
+    """
+    if out is None:
+        out = pdb[:-4] + '_matched.pdb'
+    out = Path(out)
+
+    pdb_parsed = prody.parsePDB(pdb)
+    ref_parsed = prody.parsePDB(ref)
+    pdb_hiv = pdb_parsed.getHierView()
+    ref_hiv = ref_parsed.getHierView()
+
+    # assume number of residues
+    assert(pdb_hiv.numResidues() == ref_hiv.numResidues())
+
+    pdb_rlist = pd.Series(list(pdb_hiv.iterResidues()), index=[r.getResnum() for r in pdb_hiv.iterResidues()])
+    ref_rlist = pd.Series(list(ref_hiv.iterResidues()), index=[r.getResnum() for r in ref_hiv.iterResidues()])
+    if order_by == 'resi':
+        pdb_rlist = pdb_rlist[ref_rlist.index]
+    elif isinstance(order_by, list):
+        pdb_rlist = pdb_rlist[ref_rlist.index]
+    elif order_by is None:
+        pass
+    else:
+        raise ValueError('order_by = %s' % str(order_by))
+
+    new_order = []
+    natoms = 0
+    for r1, r2 in zip(pdb_rlist, ref_rlist):
+        # same residue
+        logging.debug('%s - %s' % (r1, r2))
+        assert(r1.getResname() == r2.getResname())
+        atoms1 = r1.getNames()
+        atoms2 = r2.getNames()
+
+        # identical naming
+        assert(set(atoms1) == set(atoms2))
+
+        # non-redundant names
+        assert(len(set(atoms1)) == len(atoms1))
+        s = pd.Series(r1.getIndices(), atoms1)
+        new_order += list(s[atoms2].values)
+
+        natoms += len(atoms1)
+
+    coords = pdb_parsed.getCoordsets()
+    for set_id in range(coords.shape[0]):
+        coords[set_id] = coords[set_id][new_order]
+
+    ref_parsed.setCoords(coords)
+    prody.writePDB(out, ref_parsed)
+
+    return out, zip(list(pdb_rlist.index), list(ref_rlist.index))
+
+
+def match_pdb(pdb, ref, out=None):
     pdb = Path(pdb)
     ref = Path(ref)
 
-    models_pdb_slices = pdb_to_slices(pdb)
-    models_ref_slices = pdb_to_slices(ref)
-    assert(len(models_ref_slices) == 1)
-    assert(len(set([x.stop - x.start for x in models_pdb_slices])) == 1)
+    pdb_slice_list = pdb_to_slices(pdb)
+    ref_slice_list = pdb_to_slices(ref)
+    assert(len(ref_slice_list) == 1)
+
+    # verify the same number of lines in each slice
+    assert(len(set([x.stop - x.start for x in pdb_slice_list])) == 1)
 
     if not out:
-        out = pdb[:-4] + '_matched.pdb'
+        out = pdb
     out = Path(out)
 
     with open(pdb, 'r') as p, open(ref, 'r') as r:
         models_lines = p.readlines()
         ref_lines = r.readlines()
 
-    first_model_lines = models_lines[models_pdb_slices[0]]
-    chain_s, resi_s, resn_s, atomn_s = pdb_slices['chain'], pdb_slices['resi'], pdb_slices['resn'], pdb_slices['atomn']
-
-    first_model_order = []
-    for i, line in enumerate(first_model_lines):
-        if line.startswith('ATOM') or line.startswith('HETATM'):
-            atomn = line[atomn_s]
-            if atom_name_mapping:
-                atomn = atom_name_mapping[atomn]
-            atom = (line[chain_s], line[resi_s], line[resn_s], atomn)
-            first_model_order.append((atom, i))
-    first_model_order = zip(*first_model_order)
-    first_model_order = pd.Series(first_model_order[1], index=first_model_order[0])
-
-    ref_order = []
-    for i, line in enumerate(ref_lines):
-        if line.startswith('ATOM') or line.startswith('HETATM'):
-            atom = (line[chain_s], line[resi_s], line[resn_s], line[atomn_s])
-            ref_order.append(atom)
-
-    diff = set(list(first_model_order.index)) ^ set(ref_order)
-    if diff:
-        raise RuntimeError('Matching atoms in the rest of the models failed:\n%s' % str(diff))
-
-    old_order = first_model_order.values
-    new_order = first_model_order[ref_order].values
+    first_model_lines = models_lines[pdb_slice_list[0]]
+    old_order, new_order = match_lines(first_model_lines, ref_lines)
 
     with open(out, 'w') as f:
-        for model in models_pdb_slices:
-            lines = pd.Series(models_lines[model])
-            lines[old_order] = lines[new_order].values
-            lines = renumber_pdb(None, lines.sort_index().values)
+        for model in pdb_slice_list:
+            lines = np.array(models_lines[model])
+            lines[old_order] = lines[new_order]
+            lines = renumber_pdb(None, lines)
             f.writelines(lines)
+
+    return out
             
 
 def prepare_pdb22(pdb,
@@ -497,9 +649,6 @@ def prepare_pdb22(pdb,
                   change_his=True,
                   remove_tmp=True, 
                   patch_termini=True):
-
-    #parsed = prody.parsePDB(pdb)
-    #parsed.
 
     pwd = os.getcwd()
     try:
@@ -552,7 +701,7 @@ def prepare_pdb22(pdb,
     
     os.chdir(pwd)
     
-    return outnmin, outpsf
+    return Path(outnmin), Path(outpsf)
 
 
 def get_backbone_coords(pdb, nres):
@@ -568,13 +717,13 @@ def get_backbone_coords(pdb, nres):
         for line in lines:
             key = (int(line[22:26]), line[12:16].strip())
             if key[1] in names:
-                coords = [line[30:38], line[38:46], line[46:54]]
+                coords = get_atom_fields(line, 'x', 'y', 'z')
                 loc = dd[key]
-                bb_coords[loc:loc+3] = map(float, coords)
+                bb_coords[loc:loc+3] = coords
     return bb_coords
-    
-def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
-    #print pdb1, pdb2
+
+
+def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None, exclude_hydrogens=True):
     names = ['N', 'C', 'CA', 'CB', 'O']
     
     with open(pdb1, 'r') as f:
@@ -582,6 +731,9 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
         crds1 = {}
         for line in lines:
             if chain and (line[21] != chain):
+                continue
+
+            if exclude_hydrogens and get_atom_fields(line, 'atomn')[1] == 'H':
                 continue
                 
             coords = [line[30:38], line[38:46], line[46:54]]
@@ -621,46 +773,53 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None):
     return rmsd
 
 
-def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
+def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True, exclude_hydrogens=True):
     bb_names = ['CA', 'N', 'CB', 'O', 'C']
-    
+
+    ref_slices = pdb_to_slices(ref)
     with open(ref, 'r') as f:
-        reflines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), f.readlines())
+        ref_lines = f.readlines()
+        ref_lines = filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), ref_lines[ref_slices[0]])
         refcrds = []
-        for line in reflines:
-            if only_chain_b and line[21] != 'B':
+        for line in ref_lines:
+            if only_chain_b and get_atom_fields(line, 'chain') != 'B':
                 continue
                 
-            if backbone and (line[12:16].strip() not in bb_names):
+            aname = get_atom_fields(line, 'atomn')
+            if backbone and (aname.strip() not in bb_names):
+                continue
+
+            if exclude_hydrogens and aname[1] == 'H':
                 continue
                 
-            coords = [line[30:38], line[38:46], line[46:54]]
-            label  = map(str.strip, [line[12:16], line[17:20], line[22:26]])
-            refcrds.append((tuple(label), np.array(map(float, coords))))
+            coords = np.array(get_atom_fields(line, 'x', 'y', 'z'))
+            label = get_atom_fields(line, 'atomn', 'resn', 'resi', strip=True)
+            refcrds.append((tuple(label), coords))
 
     refcrd = dict(refcrds)
 
     lines = []
-    id = 0
     result = []
+    mdl_slices = pdb_to_slices(models)
     with open(models, 'r') as f:
-        for line in f.readlines():
-            if line.startswith('MODEL'):
-                lines = []
-                #id = line.split()[1]
-                id += 1
-                continue
-                
+        mdl_lines = f.readlines()
+
+    for mi, ms in enumerate(mdl_slices, 1):
+        for line in mdl_lines[ms]:
             if line.startswith('ATOM') or line.startswith('HETATM'):
-                if only_chain_b and line[21] != 'B':
+                if only_chain_b and get_atom_fields(line, 'chain') != 'B':
                     continue
                 
-                if backbone and (line[12:16].strip() not in bb_names):
+                aname = get_atom_fields(line, 'atomn')
+                if backbone and (aname.strip() not in bb_names):
+                    continue
+
+                if exclude_hydrogens and (aname[1] == 'H'):
                     continue
                 
-                coords = line[30:38], line[38:46], line[46:54]
+                coords = get_atom_fields(line, 'x', 'y', 'z')
                 try:
-                    coords = np.array(map(float, coords))
+                    coords = np.array(coords)
                 except ValueError as e:
                     logging.exception(e)
                     continue
@@ -669,27 +828,25 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True):
                     logging.warning('Invalid coordinates in %s' % id)
                     continue
                 
-                label = map(str.strip, [line[12:16], line[17:20], line[22:26]])
+                label = get_atom_fields(line, 'atomn', 'resn', 'resi', strip=True)
                 lines.append((tuple(label), coords))
-                
-            if line.startswith('END'):
-                rmsd = 0.0
-                n = 0
-                for label, crd in lines:
-                    if label in refcrd:
-                        crd1 = refcrd[label]
-                        crd2 = crd
-                        #print crd1, crd2
-                        rmsd += ((crd1 - crd2)**2).sum()
-                        n += 1
-                    else:
-                        logging.warning('Model %s Warning: atom %s is not in the reference molecule' % (id, str(label)))
-                if n == 0:
-                    logging.error('Model %s Error: n = 0' % id)
-                    continue
-                rmsd = np.sqrt(rmsd/n)
-                result.append((id, rmsd))
-                lines = []
+
+        n = 0
+        rmsd = 0.0
+        for label, crd in lines:
+            if label in refcrd:
+                crd1 = refcrd[label]
+                crd2 = crd
+                rmsd += ((crd1 - crd2)**2).sum()
+                n += 1
+            else:
+                logging.warning('Model %s Warning: atom %s is not in the reference molecule' % (mi, str(label)))
+        if n == 0:
+            logging.error('Model %s Error: n = 0' % mi)
+            continue
+        rmsd = np.sqrt(rmsd/n)
+        result.append((mi, rmsd))
+        lines = []
     return result
 
 

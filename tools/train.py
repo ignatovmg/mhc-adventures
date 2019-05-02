@@ -19,7 +19,6 @@ from ilovemhc import dataset
 from ilovemhc.grids import GridMaker
 from ilovemhc.define import GRID_PRM_DIR
 from ilovemhc.engines import make_trainer, make_evaluator, get_device
-from ilovemhc.torch_models import load_model
 
 
 @click.command()
@@ -102,7 +101,7 @@ def run(model_dir,
                                    grid_maker=grid_maker,
                                    bin_size=bin_size,
                                    target_transform=target_scale)
-    
+
     logging.info('Creating test loader..')
     test_loader = DataLoader(dataset=test_set, 
                              batch_size=batch_size, 

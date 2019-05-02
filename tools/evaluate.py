@@ -35,7 +35,8 @@ from ilovemhc.torch_models import load_model
 @click.option('-d', '--device_name', default="cpu", help='Device id in torch format: e.g. "cuda:0" or "cpu"')
 @click.option('--bin_size', default=1.0, help='Grid resolution')
 @click.option('--ngpu', default=1, help='Number of GPUs to use')
-@click.option('--target_column', default='target', help='Name of the target column in csv files')
+@click.option('--target_column', default='target', help='Name of the target column in csv file')
+@click.option('--tag_column', default='tag', help='Name of the tag column in csv file')
 @click.option('--scaling', default=(3.0, 1.5), nargs=2, type=float, 
               help='Two values m and s white space separated (where m -> y(m) = 0.5 and s -> steepness)')
 @click.option('--atom_property_csv', default=None, 
@@ -45,13 +46,14 @@ def run(model_file,
         data_root,
         output_dir,
         output_prefix,
-        batch_size, 
+        batch_size,
         ncores,
         device_name,
         bin_size,
         ngpu,
         target_column,
-        scaling, 
+        tag_column,
+        scaling,
         atom_property_csv):
     
     for k, v in locals().iteritems():
@@ -70,6 +72,7 @@ def run(model_file,
     
     data_table = pd.read_csv(data_csv)
     data_table['target'] = data_table[target_column]
+    data_table['tag'] = data_table[tag_column]
    
     target_scale = dataset.scale_func(3.0, 1.5)
 
@@ -128,7 +131,8 @@ def run(model_file,
     evaluator(data_loader, data_table, 1)
     
     logging.info("COMPLETED")
-    
+
+
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', 
                     level=logging.INFO, 

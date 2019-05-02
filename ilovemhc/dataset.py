@@ -12,12 +12,14 @@ import utils
 import grids
 import molgrid
 
-def scale_func(break_point = 1.2, steepness = 3.):
+
+def scale_func(break_point=1.2, steepness=3.):
     buf = np.exp(steepness*break_point)
     c1 = 1./steepness*np.log(buf-2.)
     c2 = (1.-buf)/(2.-buf)
     target_scale = lambda x: c2 / (1. + np.exp((x - c1)*steepness))
     return target_scale
+
 
 class MolDataset(Dataset):
     """Mol dataset."""
@@ -114,7 +116,9 @@ class MolDataset(Dataset):
                 #logging.error('Failed creating grid for %s' % full_path)
                 #logging.exception(e)
                 #grid = self.grid_maker.make_grid('structures/1ddh_RGPGRAFVTI/min/split_min/00001790.pdb', self.bin_size)
-                raise RuntimeError('Failed creating grid for %s' % full_path)
+                #raise RuntimeError('Failed creating grid for %s' % full_path)
+                logging.error('Failed creating grid for %s' % full_path)
+                raise
         else:
             grid_path = full_path
             

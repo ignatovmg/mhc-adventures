@@ -17,11 +17,21 @@ import click
 @click.option('--minimize', is_flag=True)
 @click.option('--rosetta_score', is_flag=True)
 @click.option('--ref_pdb', default=None, type=click.Path())
+@click.option('--vdw', default=0.3)
+@click.option('--sample_resi_within', default=0.0)
 def cli(*args, **kwargs):
     pipeline(*args, **kwargs)
 
 
-def pipeline(mhc, pseq, nsamples, outdir='.', minimize=True, rosetta_score=True, ref_pdb=None):
+def pipeline(mhc, pseq, nsamples,
+             outdir='.',
+             minimize=True,
+             rosetta_score=True,
+             ref_pdb=None,
+             vdw=0.2,
+             sample_resi_within=0.0,
+             minimize_resi_within=4.0):
+
     mhc = Path(mhc)
 
     if ref_pdb:
@@ -35,33 +45,28 @@ def pipeline(mhc, pseq, nsamples, outdir='.', minimize=True, rosetta_score=True,
     mhccpy = outdir.joinpath('mhc.pdb')
     mhc.copyfile(mhccpy)
     mhc = mhccpy
-    utils.renumber_pdb(mhc, mhc, keep_resi=False)
-    mhc, _ = utils.prepare_pdb22(mhc, outdir.joinpath('mhc'))
-    utils.hsd2his(mhc)
 
-    #refcpy = outdir.joinpath('ref.pdb')
-    ##ref_pdb.copyfile(refcpy)
-    #ref_pdb = refcpy
-    if ref_pdb:
-        ref_pdb, _ = utils.prepare_pdb22(ref_pdb, outdir.joinpath('ref'))
-        utils.hsd2his(ref_pdb)
-        utils.renumber_pdb(ref_pdb, ref_pdb, keep_resi=False)
+    refcpy = outdir.joinpath('ref.pdb')
+    ref_pdb.copyfile(refcpy)
+    ref_pdb = refcpy
 
     logging.info('Peptide generation')
 
     generate_peptides.generate_peptides(mhc, pseq, nsamples,
                                         nrotamers=1,
-                                        vdw=0.2,
+                                        vdw=vdw,
                                         outdir=outdir,
                                         seed=123456,
-                                        sample_resi_within=3.0)
+                                        sample_resi_within=sample_resi_within)
 
     brikarded = outdir.joinpath('brikard.pdb')
     assert(brikarded.exists())
 
     if minimize:
         logging.info('Minimization')
-        minimized, nonminimized, psf = minimization.minimize_energy(brikarded)
+        minimized, nonminimized, psf = minimization.minimize_energy_single_files(brikarded, fix_radius=minimize_resi_within)
+        #minimized = brikarded.dirname().joinpath('minimized.pdb')
+        #nonminimized = brikarded.dirname().joinpath('brikard_nmin.pdb')
         assert(minimized.exists() and nonminimized.exists())
 
         if rosetta_score:

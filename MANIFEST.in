@@ -1,3 +1,5 @@
-recursive-include ilovemhc/src *
-include ilovemhc/bin/*
+recursive-include ilovemhc/source *
+recursive-include ilovemhc/mol-prms *
+recursive-include ilovemhc/grid-prms *
+recursive-include ilovemhc/executables *
 include LICENSE README.md

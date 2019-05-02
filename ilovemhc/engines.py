@@ -77,6 +77,7 @@ def _my_create_evaluator(model,
 
     return engine
 
+
 def _my_create_supervised_trainer(model, optimizer, loss_fn,
                               device=None, 
                               non_blocking=False,
@@ -98,10 +99,12 @@ def _my_create_supervised_trainer(model, optimizer, loss_fn,
 
     return Engine(_update)
 
+
 def prepended_print(prepend, output):
     lines = str(output).split('\n')
     result = '\n'.join([prepend + x for x in lines])
     logging.info('\n' + result)
+
 
 def regression_stats(df, ascending=False):
     '''
@@ -132,7 +135,8 @@ def regression_stats(df, ascending=False):
         output[name] = to_fill
         
     return output
-    
+
+
 def make_evaluator(model, loss_fn, device, model_dir='models', model_prefix='model', every_niter=100):
     def _inference_model(batch):
         with torch.no_grad():
@@ -199,7 +203,8 @@ def make_evaluator(model, loss_fn, device, model_dir='models', model_prefix='mod
         logging.info('VALID EPOCH[%i] COMPLETED' % epoch)
         
     return run
-    
+
+
 def make_trainer(model, 
                  optimizer, 
                  loss_fn, 
@@ -268,9 +273,9 @@ def make_trainer(model,
             evaluator(test_loader, test_table, epoch)
             
     return run
-    
-#============== deprecated ==============
 
+
+# ============== deprecated ==============
 def regression_evaluator_with_tagwise_statistics(model, loss, test_table, device, stats_prefix):
     assert(test_table.loc[:, ['tag','target','path']].dropna().shape[0] == test_table.shape[0])
     

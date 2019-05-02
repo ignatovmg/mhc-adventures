@@ -67,7 +67,7 @@ compute_grid(const char* pdb_file,
         MSG_ERR("File %s couldn't be opened", type2properties_file);
         return NULL;
     }
-    
+
     try {
         std::getline(infile, linebuf);
 
@@ -159,16 +159,19 @@ compute_grid(const char* pdb_file,
     // read only ^ATOM lines
     while (std::getline(infile, line)) {
         if (line.substr(0, 4).compare("ATOM") == 0) {
-            
+
             char chain  = line[21];
-            char ele    = line[77];
+            char ele    = line[13];
+            if (line[12] != ' ') {
+                ele = line[12];
+            }
             int ele_id  = get_element_index(elements, ele);
-            
+
             if (ele_id == -1) {
                 MSG_ERR("Couldn't find element '%c' in table", ele);
                 return NULL;
             }
-            
+
             std::string atomname = line.substr(12, 8);
             std::string typen;
             std::vector<float> ppts;
@@ -255,7 +258,7 @@ static PyObject* make_grid(PyObject *self, PyObject *args)
     int nch; // number of channels
     
     char err[500];
-    
+
     if (!PyArg_ParseTuple(args, "sssfi", &pdb_file, &type2properties_file, &name2type_file, &bin, &nch)) {
         return NULL;
     }

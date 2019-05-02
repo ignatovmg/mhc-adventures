@@ -41,6 +41,7 @@ def score_models(pdb, out=None, convert=True):
     scores_path = out.dirname().joinpath('score.sc')
     scores_path.remove_p()
 
+    rosetta_models_dir = out.dirname()
     call = [define.FLEXPEPDOCK_EXE,
             '-database', define.ROSETTA_DB,
             '-out:no_nstruct_label',
@@ -48,7 +49,8 @@ def score_models(pdb, out=None, convert=True):
             '-in:file::l', models_list,
             '-ignore_zero_occupancy', 'false',
             '-out:file:scorefile', scores_path,
-            '-overwrite']
+            '-overwrite',
+            '-out:path:all', rosetta_models_dir]  # last is where to put models made by rosetta (unrequested)
     try: 
         wrappers.shell_call(call, shell=False)
     except:
@@ -57,7 +59,8 @@ def score_models(pdb, out=None, convert=True):
     # clean up
     for f in split_dir.listdir():
         f.remove()
-        f.basename().remove_p()
+        # remove models which rosetta creates
+        rosetta_models_dir.joinpath(f.basename()).remove_p()
     split_dir.removedirs()
 
     # transform to csv

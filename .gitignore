@@ -5,6 +5,7 @@ Untitled.ipynb
 dist/
 build/
 ilovemhc.egg-info/
+test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

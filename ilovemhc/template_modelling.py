@@ -16,6 +16,7 @@ from pymol import cmd
 import subprocess as sbs
 import logging
 
+
 class TemplateModeller():
     def __init__(self, pdb_table=None, pdb_path=define.GDOMAINS_DIR, scwrl_bin=define.SCWRL_EXE):
         '''
@@ -32,10 +33,10 @@ class TemplateModeller():
         self.scwrl_bin = scwrl_bin
 
     def _get_mhc_path(self, pdb):
-        return self.pdb_path + '/' + pdb + '_mhc_fix_ph.pdb'
+        return self.pdb_path + '/' + pdb + '_mhc_ah.pdb'
     
     def _get_pep_path(self, pdb):
-        return self.pdb_path + '/' + pdb + '_pep_fix_ph.pdb'
+        return self.pdb_path + '/' + pdb + '_pep_ah.pdb'
         
     # the choice of coefficient in scoring for template picking was
     # studied and 0.2 came out the best
@@ -164,7 +165,7 @@ class TemplateModeller():
         tmp_out_name = str(os.getpid()) + '_out.pdb'
         call = [self.scwrl_bin, '-s', tmp_seq_name, '-i', tmp_pdb_name, '-o', tmp_out_name]
         if not add_h:
-              call += ['-h']
+            call += ['-h']
         shell_call(call)
         
         # change peptide chain to B and renumber

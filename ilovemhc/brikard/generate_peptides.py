@@ -179,13 +179,14 @@ close all
 
 
 def chimera_convert(pdb, mol2):
+    pdb = Path(pdb)
+    mol2 = Path(mol2)
     file_error(pdb)
     
     cmd = mol2.dirname().joinpath('chimera.cmd')
     with open(cmd, 'w') as f:
         f.write(_chimera_script.format(pdb.basename(), 'mol2', mol2.basename()))
 
-    #check_output(['module', 'load', 'chimera'])
     utils.shell_call(['chimera', '--nogui', cmd])
     file_error(mol2)
 
@@ -251,9 +252,12 @@ sBA1
 '''
 
 
-def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, rec_resi_list=None):
+def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, rec_resi_list=None, restrictions=None):
 
-    pivots = (resin + 1, (resin + resic) / 2, resic - 1)
+    # pivots = (resin + 1, (resin + resic) / 2, resic - 1)
+    residues = range(resin, resic + 1)
+    pivots = tuple(residues[3:6])
+
     sampled = set(range(resin+1, resic))
     sampled = sorted(list(sampled - set(pivots)))
     pivots = '{0}(N) {0}(CA) {1}(N) {1}(CA) {2}(N) {2}(CA)'.format(*pivots)
@@ -277,6 +281,11 @@ def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, re
             assemble_file_content += '@ROTAMER_INCLUSIONS\n'
             assemble_file_content += ' '.join(map(str, rec_resi_list))
 
+        if restrictions:
+            assemble_file_content += '@RESTRICTIONS\n'
+            for (resi, torsion), limits in sorted(restrictions.iteritems()):
+                assemble_file_content += '{:d} {:d} {}\n'.format(resi, torsion, limits)
+
         a_file = outdir.joinpath('a.mhc')
         with open(a_file, 'w') as f:
             f.write(assemble_file_content)
@@ -288,6 +297,7 @@ def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, re
 
         noutputs = 0
         output = ''
+        start_time = time()
         while output or (process.poll() is None):
             output = process.stdout.readline()
             if output:
@@ -296,12 +306,20 @@ def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, re
                     naccepted = int(output.split('accepted = ')[-1])
                     noutputs += 1
                     progress = naccepted / float(noutputs)
-                    if noutputs > 10 and progress < 0.3:
+
+                    # Kill if progress is too slow
+                    if noutputs > 50 and progress < 0.05:
                         logging.info("Progress is too slow: %f. Killing ..." % progress)
                         process.kill()
                     if naccepted > N:
                         logging.info("Brikard has generated %i (more than requested).." % naccepted)
                         #process.kill()
+
+            # Kill if cannot initialize sampling in 5 mins
+            if noutputs == 0:
+                if time() - start_time > 5 * 60:
+                    logging.info('Couldn\'t find the first lead in 5 minutes, decrease VDW penalty')
+                    process.kill()
 
         brikard_raw = outdir.joinpath('mol_000001.pdb')
         brikard_out = outdir.joinpath('brikard.pdb')
@@ -365,7 +383,7 @@ def run_brikard(N, resin, resic, outdir=Path('.'), nrot=1, vdw=0.3, seed=123, re
 @click.argument('seq')
 @click.argument('nsamples', type=int)
 @click.option('--nrotamers', default=1, help='Number of rotamers to sample')
-@click.option('--vdw', default=0.35)
+@click.option('--vdw', default=0.2)
 @click.option('--sample_resi_within', default=None, type=float)
 @click.option('--outdir', default='.', type=click.Path(exists=True))
 @click.option('--seed', default=123, help='Random seed')
@@ -392,6 +410,11 @@ def generate_peptides(mhc, seq, nsamples, nrotamers, vdw, outdir, seed, sample_r
         if a not in IUPACProtein.letters:
             raise RuntimeError('Residue %s is not a standard amino acid' % a)
 
+    # fix mhc
+    utils.renumber_pdb(mhc, mhc, keep_resi=False)
+    mhc, _ = utils.prepare_pdb22(mhc, outdir.joinpath('mhc'))
+    utils.hsd2his(mhc)
+
     peptide_template = outdir.joinpath('peptide.pdb')
     generate_template(seq, peptide_template)
 
@@ -406,12 +429,14 @@ def generate_peptides(mhc, seq, nsamples, nrotamers, vdw, outdir, seed, sample_r
     peptide_min = outdir.joinpath('peptide_min.pdb')
     preminimize_peptide(mhc, peptide_ready, peptide_min)
 
+    peptide_final = peptide_min
+
     sample_resi_list = []
     if sample_resi_within is not None:
-        sample_resi_list = find_resi_within(mhc, peptide_min, sample_resi_within)
+        sample_resi_list = find_resi_within(mhc, peptide_final, sample_resi_within)
 
     merged_pdb = outdir.joinpath('merged.pdb')
-    utils.merge_two(merged_pdb, mhc, peptide_min)
+    utils.merge_two(merged_pdb, mhc, peptide_final)
 
     # identify peptide residues in the merged structure
     with open(merged_pdb, 'r') as f:
@@ -421,22 +446,41 @@ def generate_peptides(mhc, seq, nsamples, nrotamers, vdw, outdir, seed, sample_r
 
     resin = residues[0]  # N-terminus
     resic = residues[-1]  # C-terminus
+    nres = len(residues)
     
     # make mol2
     mol2_file = outdir.joinpath('mol.mol2')
     chimera_convert(merged_pdb, mol2_file)
+
+    restrictions = {
+        #(1, 2): '(-180 -150 75 180 0.2)',  # [-180., -160., 75., 180.],
+        #(2, 1): '-160 -40',  # [-115., -40.],
+        #(2, 2): '(-180 -160 120 180 0.2)',  # [-180., -160., 120., 180.],
+        #(3, 1): '-150 -45',  # [-150., -45.],
+        #(3, 2): '(-180 -140 110 180 0.3)',  # [-180., -140., 110., 180.],
+        #(4, 1): '-175 -30',  # [-175., -30.],
+
+        #(nres, 1):     '-180 -40',  # [-180, -40.],
+        #(nres - 1, 2): '(-180 -140 80 180 0.4)',  # [-180, -140., 80., 180.],
+        #(nres - 1, 1): '-165 -30',  # [-165, -30.],
+        #(nres - 2, 1): '-175 -30'  # [-175, -30.]
+    }
+
+    #restrictions = {(residues[resi-1], tor): v for (resi, tor), v in restrictions.iteritems()}
+    restrictions = None
 
     for _vdw in reversed(list(np.arange(vdw_min, vdw_max + 0.0001, 0.05))):
         logging.info("Trying VDW %.3f" % _vdw)
 
         out_pdb, nbrikarded = run_brikard(nsamples, 
                                           resin, 
-                                          resic, 
+                                          resic,
                                           outdir=outdir, 
                                           nrot=nrotamers, 
                                           vdw=_vdw, 
                                           seed=seed,
-                                          rec_resi_list=sample_resi_list)
+                                          rec_resi_list=sample_resi_list,
+                                          restrictions=restrictions)
 
         if nbrikarded < nsamples:
             logging.info("===== Current VDW of %.3f is too high" % _vdw)
