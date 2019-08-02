@@ -17,7 +17,7 @@ import subprocess as sbs
 import logging
 
 
-class TemplateModeller():
+class TemplateModeller:
     def __init__(self, pdb_table=None, pdb_path=define.GDOMAINS_DIR, scwrl_bin=define.SCWRL_EXE):
         '''
         pdb_table - pandas table containing columns: 'pdb', 'peptide', 'resi_orig', 'seq_orig', 'pseudo_nielsen'

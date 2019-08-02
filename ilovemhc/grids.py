@@ -54,7 +54,7 @@ class GridMaker():
         nch = dim[0]
         
         if (channel > nch / 2):
-            throw_error(ValueError, 'Channel id must be less, than %i' % (nch / 2))
+            raise ValueError('Channel id must be less, than %i' % (nch / 2))
 
         counter = 1
         png_files = []
@@ -145,7 +145,7 @@ class GridMaker():
         with open(save_pdb, 'w') as f:
             for mdl, ch in enumerate(clist, 1):
                 if (ch > ch_per_mol):
-                    throw_error(ValueError, 'Channel id must be less, than %i' % ch_per_mol)
+                    raise ValueError('Channel id must be less, than %i' % ch_per_mol)
 
                 spacial_rec = grid[ch]
                 spacial_lig = grid[ch+ch_per_mol]
@@ -181,7 +181,7 @@ class GridMaker():
                 f.write('END\n')
                 
     def grid_to_dx(self, save_dir, grid, bin_size, channel=None, use_channel_names=False):
-        origin = np.array([7.473, 4.334, 7.701]) - 5.0;
+        #origin = np.array([7.473, 4.334, 7.701]) - 5.0
         
         if grid.shape[0] % 2 != 0:
             raise ValueError('Number of channels must be even (%i)' % grid.shape[0])

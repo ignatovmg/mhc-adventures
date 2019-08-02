@@ -6,6 +6,8 @@ import logging
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+from sklearn.metrics import roc_auc_score
+
 from wrappers import *
 import utils
 import grids
@@ -32,6 +34,7 @@ def cuda_is_avail():
     avail = torch.cuda.is_available()
     logging.info("CUDA is available yay" if avail else "CUDA is not available :-(")
     return avail
+
 
 def get_device(device_name):
     avail = cuda_is_avail()
@@ -128,6 +131,14 @@ def regression_stats(df, ascending=False):
         rank = list(order).index(0)
         to_fill['rank'] = rank
         to_fill['percentile'] = float(rank) / len(order)
+
+        try:
+            rocauc = roc_auc_score(group['target'], group['prediction'])
+        except Exception as e:
+            logging.exception(e)
+            rocauc = np.nan
+        to_fill['AUC'] = rocauc
+
         to_fill['corr'] = np.corrcoef(group['prediction'], group['target'])[0, 1]
         to_fill['ktau'] = stats.kendalltau(order, np.arange(len(order))).correlation
         to_fill['size'] = group.shape[0]
@@ -141,13 +152,18 @@ def make_evaluator(model, loss_fn, device, model_dir='models', model_prefix='mod
     def _inference_model(batch):
         with torch.no_grad():
             x = batch[0].to(device)
-            y = batch[1].to(device)
+            #y = batch[1].to(device)
+            y = batch[1].type(torch.LongTensor).to(device)
             index = batch[2]
             y_pred = model(x)
-            #logging.debug(y_pred)
+
+            #y_pred = y_pred[:, 0]
+            #loss = loss_fn(y_pred, y)
+
+            matrix = torch.cat([1 - y_pred, y_pred], 1)
+            loss = loss_fn(matrix, y)
             y_pred = y_pred[:, 0]
-            
-            loss = loss_fn(y_pred, y)
+
             return {'loss': loss.item(), 'prediction': y_pred, 'target': y, 'idx': index}
         
     def run(test_loader, test_table, epoch=1):
@@ -218,14 +234,20 @@ def make_trainer(model,
     
     def _update_model(batch):
         x = batch[0].to(device)
-        y = batch[1].type(torch.FloatTensor).to(device)
+        #y = batch[1].type(torch.FloatTensor).to(device)
+        y = batch[1].type(torch.LongTensor).to(device)
         optimizer.zero_grad()
         
         with torch.set_grad_enabled(True):
-            y_pred = model(x)[:, 0]
-            loss = loss_fn(y_pred, y)
+            y_pred = model(x) # [:, 0]
+            matrix = torch.cat([1 - y_pred, y_pred], 1)
+            y_pred = y_pred[:, 0]
+
+            #loss = loss_fn(y_pred, y)
+            loss = loss_fn(matrix, y)
             loss.backward()
             optimizer.step()
+
         return {'loss': loss.item(), 'prediction': y_pred, 'target': y}
 
     def run(train_loader, nepoch):

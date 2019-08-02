@@ -41,6 +41,7 @@ from ilovemhc.torch_models import load_model
               help='Two values m and s white space separated (where m -> y(m) = 0.5 and s -> steepness)')
 @click.option('--atom_property_csv', default=None, 
               help='CSV with atomic properties (root directory in ' + GRID_PRM_DIR)
+@click.option('--no_scale', is_flag=True, help='Don\'t scale the target value')
 def run(model_file,
         data_csv, 
         data_root,
@@ -54,8 +55,9 @@ def run(model_file,
         target_column,
         tag_column,
         scaling,
-        atom_property_csv):
-    
+        atom_property_csv,
+        no_scale):
+
     for k, v in locals().iteritems():
         logging.info("{:20s} = {}".format(str(k), str(v)))
     
@@ -74,7 +76,10 @@ def run(model_file,
     data_table['target'] = data_table[target_column]
     data_table['tag'] = data_table[tag_column]
    
-    target_scale = dataset.scale_func(3.0, 1.5)
+    if no_scale:
+        target_scale = None
+    else:
+        target_scale = dataset.scale_func_sigmoid(scaling[0], scaling[1])
 
     grid_maker = None
     if atom_property_csv:

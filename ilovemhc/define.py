@@ -39,6 +39,9 @@ BRIKARD_EXE = os.path.join(BRIKARD_DIR, 'bin/brikard')
 ASSEMBLE_EXE = os.path.join(BRIKARD_DIR, 'bin/assemble')
 MISSING_LOOPS_EXE = os.path.join(BRIKARD_DIR, 'bin/missing_loops')
 FLEXPEPDOCK_EXE = os.path.join(ROSETTA_DIR, 'main/source/bin/FlexPepDocking.linuxgccrelease')
+CCMPRED_EXE = '/gpfs/projects/KozakovGroup/software/CCMpred/bin/ccmpred'
+NNALIGN_EXE = '/gpfs/projects/KozakovGroup/software/nnalign-2.1/nnalign'
+
 
 # logging
 LOGGING_CONF = os.path.join(os.path.dirname(PACKAGE_ROOT), 'logging.conf')

@@ -1,7 +1,8 @@
 import generate_peptides
 import minimization
+import atom_naming
 import rosetta
-from ilovemhc import utils
+from ilovemhc import utils, define
 from path import Path
 import pandas as pd
 
@@ -33,6 +34,7 @@ def pipeline(mhc, pseq, nsamples,
              minimize_resi_within=4.0):
 
     mhc = Path(mhc)
+    logging.info(mhc)
 
     if ref_pdb:
         ref_pdb = Path(ref_pdb)
@@ -51,7 +53,6 @@ def pipeline(mhc, pseq, nsamples,
     ref_pdb = refcpy
 
     logging.info('Peptide generation')
-
     generate_peptides.generate_peptides(mhc, pseq, nsamples,
                                         nrotamers=1,
                                         vdw=vdw,
@@ -64,14 +65,25 @@ def pipeline(mhc, pseq, nsamples,
 
     if minimize:
         logging.info('Minimization')
-        minimized, nonminimized, psf = minimization.minimize_energy_single_files(brikarded, fix_radius=minimize_resi_within)
+
+        logging.info('Libmol2 minimization')
+        #minimized, nonminimized, psf = minimization.minimize_energy_single_files(brikarded, fix_radius=minimize_resi_within)
         #minimized = brikarded.dirname().joinpath('minimized.pdb')
         #nonminimized = brikarded.dirname().joinpath('brikard_nmin.pdb')
-        assert(minimized.exists() and nonminimized.exists())
+        #assert (minimized.exists() and nonminimized.exists())
 
+        rosetta_pdb = None
         if rosetta_score:
-            logging.info('Rosetta scoring')
-            rosetta.score_models(minimized, outdir.joinpath('minimized-rosetta.csv'))
+            logging.info('Rosetta minimization')
+            nonminimized, psf, first_model = minimization.prepare_models(brikarded, define.PRM22_FILE, define.RTF22_FILE)
+            first_model.remove()
+            rosetta_csv, rosetta_pdb = rosetta.score_models(nonminimized, outdir.joinpath('rosetta.csv'), minimize=True, constraints=True)
+        else:
+            logging.info('Libmol2 minimization')
+            minimized, nonminimized, psf = minimization.minimize_energy_single_files(brikarded, fix_radius=minimize_resi_within)
+            #minimized = brikarded.dirname().joinpath('minimized.pdb')
+            #nonminimized = brikarded.dirname().joinpath('brikard_nmin.pdb')
+            assert(minimized.exists() and nonminimized.exists())
 
         if ref_pdb:
             logging.info('RMSD calculation')
@@ -80,14 +92,29 @@ def pipeline(mhc, pseq, nsamples,
             nmin_bb = utils.rmsd_ref_vs_models(ref_pdb, nonminimized, backbone=True)
             min_aa = utils.rmsd_ref_vs_models(ref_pdb, minimized, backbone=False)
             min_bb = utils.rmsd_ref_vs_models(ref_pdb, minimized, backbone=True)
+            rmsd = [nmin_aa, nmin_bb, min_aa, min_bb]
+
+            if rosetta_pdb:
+                ros_aa = utils.rmsd_ref_vs_models(ref_pdb, rosetta_pdb, backbone=False)
+                ros_bb = utils.rmsd_ref_vs_models(ref_pdb, rosetta_pdb, backbone=True)
+                rmsd += [ros_aa, ros_bb]
 
             # convert to Series in order to match model indices in case if some models were skipped
-            rmsd = [nmin_aa, nmin_bb, min_aa, min_bb]
             rmsd = [zip(*x) for x in rmsd]
             rmsd = [pd.Series(x[1], index=x[0]) for x in rmsd]
             rmsd = pd.DataFrame(rmsd).transpose()
-            rmsd.columns = ['nmin_aa', 'nmin_bb', 'min_aa', 'min_bb']
+            cols = ['nmin_aa', 'nmin_bb', 'min_aa', 'min_bb']
+
+            if rosetta_score:
+                cols += ['ros_aa', 'ros_bb']
+
+            rmsd.columns = cols
             rmsd.to_csv(outdir.joinpath('rmsd.csv'), float_format='%.3f')
+            #if rosetta_score:
+            #    rmsd.to_csv(outdir.joinpath('rmsd_rosetta.csv'), float_format='%.3f')
+            #else:
+            #    rmsd.to_csv(outdir.joinpath('rmsd_libmol.csv'), float_format='%.3f')
+    logging.info('Finished pipeline')
 
 
 if __name__ == '__main__':

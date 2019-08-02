@@ -165,7 +165,7 @@ compute_grid(const char* pdb_file,
             if (line[12] != ' ') {
                 ele = line[12];
             }
-            int ele_id  = get_element_index(elements, ele);
+            int ele_id = get_element_index(elements, ele);
 
             if (ele_id == -1) {
                 MSG_ERR("Couldn't find element '%c' in table", ele);

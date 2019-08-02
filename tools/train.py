@@ -41,6 +41,7 @@ from ilovemhc.engines import make_trainer, make_evaluator, get_device
 @click.option('--scaling', default=(3.0, 1.5), nargs=2, type=float, 
               help='Two values m and s white space separated (where m -> y(m) = 0.5 and s -> steepness)')
 @click.option('--atom_property_csv', default=None, help='CSV with atomic properties (root directory in ' + GRID_PRM_DIR)
+@click.option('--no_scale', is_flag=True)
 def run(model_dir,
         model_name, 
         train_csv,
@@ -58,7 +59,8 @@ def run(model_dir,
         use_saved, 
         target_column, 
         scaling, 
-        atom_property_csv):
+        atom_property_csv,
+        no_scale):
 
     for k, v in locals().iteritems():
         logging.info("{:20s} = {}".format(str(k), str(v)))
@@ -71,7 +73,10 @@ def run(model_dir,
     avail, device = get_device(device_name)
 
     if not avail:
-        raise RuntimeError('CUDA is not available')
+        if device.startswith('cuda'):
+            raise RuntimeError('CUDA is not available')
+        else:
+            logging.warning('CUDA is not available')
 
     logging.info('Reading tables..')
     test_table = pd.read_csv(test_csv)
@@ -80,7 +85,9 @@ def run(model_dir,
     test_table['target'] = test_table[target_column]
     train_table['target'] = train_table[target_column]
               
-    target_scale = dataset.scale_func(scaling[0], scaling[1])
+    target_scale = dataset.scale_func_sigmoid(scaling[0], scaling[1])
+    if no_scale:
+        target_scale = None
               
     grid_maker = None
     if atom_property_csv:
@@ -88,7 +95,7 @@ def run(model_dir,
         grid_maker = GridMaker(propspath=GRID_PRM_DIR + '/' + atom_property_csv)
     
     logging.info('Creating test dataset..')
-    test_set = dataset.MolDataset(test_table, 
+    test_set = dataset.MolDataset(test_table,
                                   test_root,
                                   grid_maker=grid_maker,
                                   bin_size=bin_size,
@@ -96,16 +103,16 @@ def run(model_dir,
                                   add_index=True)
     
     logging.info('Creating train dataset..')
-    train_set = dataset.MolDataset(train_table, 
+    train_set = dataset.MolDataset(train_table,
                                    train_root,
                                    grid_maker=grid_maker,
                                    bin_size=bin_size,
                                    target_transform=target_scale)
 
     logging.info('Creating test loader..')
-    test_loader = DataLoader(dataset=test_set, 
-                             batch_size=batch_size, 
-                             num_workers=ncores, 
+    test_loader = DataLoader(dataset=test_set,
+                             batch_size=batch_size,
+                             num_workers=ncores,
                              shuffle=False,
                              drop_last=False)
     
@@ -142,7 +149,7 @@ def run(model_dir,
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     logging.info(optimizer)
 
-    loss = torch.nn.MSELoss()
+    loss = torch.nn.NLLLoss()
     logging.info(loss)
 
     logging.info('Creating evaluator..')

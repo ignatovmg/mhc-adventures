@@ -35,7 +35,7 @@ def shell_call(call, shell=False, *args, **kwargs):
         logging.debug('Command executed: ' + cmd_string)
         output = subprocess.check_output(call, shell=shell, *args, **kwargs)
     except Exception as e:
-        logging.error(e.output)
+        logging.exception(e)
         raise
     
     logging.debug('Command output: ')

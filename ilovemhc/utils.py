@@ -769,6 +769,9 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None, exclude_hydrogen
         if not np.isnan(crd2).any():
             rmsd += ((crd1 - crd2)**2).sum()
             n += 1
+    if n == 0:
+        logging.error('No atoms to compute RMSD for (n = 0)')
+        return np.nan
     rmsd = np.sqrt(rmsd / n)
     return rmsd
 
@@ -866,3 +869,14 @@ def compute_backbone_distance_matrix(plist):
 
 def compute_sequence_matrix(seq_list):
     return compute_generic_distance_matrix(seq_list, seq_dist)
+
+
+def compute_sequence_matrix_2lists(seq_list1, seq_list2):
+    dmat = np.zeros((len(seq_list1), len(seq_list2)))
+    for i in range(len(seq_list1)):
+        for j in range(len(seq_list2)):
+            val = seq_dist(seq_list1[i], seq_list2[j])
+            dmat[i, j] = val
+    return dmat
+
+
