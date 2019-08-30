@@ -27,6 +27,7 @@ BRIKARD_LIB = os.path.join(BRIKARD_DIR, 'lib')
 ROSETTA_DIR = '/gpfs/projects/KozakovGroup/software/rosetta_src_2015.20.57849_bundle'
 ROSETTA_DB = os.path.join(ROSETTA_DIR, 'main/database')
 TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/gdomains-complete.csv'
+ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
 
 # executables
 PDBPREP_EXE = os.path.join(PDB_PREP_DIR, 'pdbprep.pl')
@@ -41,7 +42,6 @@ MISSING_LOOPS_EXE = os.path.join(BRIKARD_DIR, 'bin/missing_loops')
 FLEXPEPDOCK_EXE = os.path.join(ROSETTA_DIR, 'main/source/bin/FlexPepDocking.linuxgccrelease')
 CCMPRED_EXE = '/gpfs/projects/KozakovGroup/software/CCMpred/bin/ccmpred'
 NNALIGN_EXE = '/gpfs/projects/KozakovGroup/software/nnalign-2.1/nnalign'
-
 
 # logging
 LOGGING_CONF = os.path.join(os.path.dirname(PACKAGE_ROOT), 'logging.conf')
