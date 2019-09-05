@@ -9,7 +9,7 @@ MOL_PRM_DIR = os.path.join(PACKAGE_ROOT, 'mol-prms')
 PDB_PREP_DIR = os.path.join(BIN_DIR, 'pdb_prep')
 GRID_PRM_DIR = os.path.join(PACKAGE_ROOT, 'grid-prms')
 TEST_DIR = os.path.join(PACKAGE_ROOT, 'data/test_data')
-PEPTIDE_TEMPLATES_DIR = os.path.join(PACKAGE_ROOT, 'brikard/ptemplates')
+PEPTIDE_TEMPLATES_DIR = os.path.join(PACKAGE_ROOT, 'ptemplates')
 
 # parameters
 RTF22_FILE = os.path.join(MOL_PRM_DIR, 'top_all22_prot_changed_atom_names.rtf')

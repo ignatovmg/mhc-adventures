@@ -25,9 +25,32 @@ _ALLELE_TABLE = pd.read_csv(define.ALLELE_SEQUENCES_CSV, sep=' ', index_col=1)
 class BasePDB(object):
     _chain_order = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-    def __init__(self, pdb_file):
-        self.ag = prody.parsePDB(pdb_file)
-        self.energy_table = self.read_energy_from_pdb(pdb_file)
+    def __init__(self, pdb_file=None, pdb_list=None, ag=None, read_energy=False):
+        self.energy_table = None
+
+        if not pdb_file is None:
+            self.ag = prody.parsePDB(pdb_file)
+            if read_energy:
+                self.energy_table = self.read_energy_from_pdb(pdb_file)
+
+        elif not pdb_list is None:
+            ag_first = prody.parsePDB(pdb_list[0])
+            new_csets = []
+            for f in pdb_list:
+                ag = prody.parsePDB(f)
+                assert (list(ag.getNames()) == list(ag_first.getNames()))
+                new_csets.append(ag.getCoords())
+            ag_first.setCoords(np.array(new_csets))
+            self.ag = ag_first
+
+        elif not ag is None:
+            self.ag = ag.copy()
+
+        else:
+            raise ValueError('No molecules specified')
+
+    def __getattr__(self, name):
+        return self.ag.__getattribute__(name)
 
     def renumber(self, keep_resi=True, keep_chains=True):
         self.ag.setSerials(range(1, self.ag.numAtoms() + 1))
@@ -42,6 +65,13 @@ class BasePDB(object):
                 if not keep_resi:
                     for resi, res in enumerate(chain.iterResidues(), 1):
                         res.setResnum(resi)
+        return self
+
+    def copy(self):
+        new = BasePDB(ag=self.ag)
+        if not self.energy_table is None:
+            new.energy_table = self.energy_table.copy()
+        return new
 
     def _make_csets(self, csets):
         if csets is None:
@@ -103,6 +133,18 @@ class BasePDB(object):
 
         prody.writePDB(pdb, ag, **kwargs)
 
+    def save_sep(self, dirname, **kwargs):
+        dirname = Path(dirname)
+        dirname.mkdir_p()
+
+        flist = []
+        for cset in range(self.ag.numCoordsets()):
+            fname = str(dirname.joinpath('%i.pdb' % cset))
+            self.save(fname, csets=cset, **kwargs)
+            flist.append(fname)
+
+        return flist
+
     def prepare_pdb22_one_frame(self,
                                 out_prefix,
                                 cset=0,
@@ -158,8 +200,40 @@ class BasePDB(object):
             raise
 
         pwd.chdir()
-
         return outnmin, outpsf
+
+    @staticmethod
+    def _match_by_residue_position(pdb, ref):
+        """
+        Matches atom names to the reference residuewise
+        """
+        new_order = []
+        natoms = 0
+        for r1, r2 in zip(pdb.iterResidues(), ref.iterResidues()):
+            # same residue
+            logging.debug('%s - %s' % (r1, r2))
+            assert (r1.getResname() == r2.getResname())
+            atoms1 = r1.getNames()
+            atoms2 = r2.getNames()
+
+            # identical naming
+            assert (set(atoms1) == set(atoms2))
+
+            # non-redundant names
+            assert (len(set(atoms1)) == len(atoms1))
+            s = pd.Series(r1.getIndices(), atoms1)
+            new_order += list(s[atoms2].values)
+
+            natoms += len(atoms1)
+
+        coords = pdb.getCoordsets()
+        coords = coords[:, new_order, :]
+        #for set_id in range(coords.shape[0]):
+        #    coords[set_id] = coords[set_id][new_order]
+
+        ref = ref.copy()
+        ref.setCoords(coords)
+        return ref
 
     def prepare_pdb22(self, out_prefix, csets=None, **kwargs):
         csets = self._make_csets(csets)
@@ -169,10 +243,14 @@ class BasePDB(object):
 
         if len(csets) == 1:
             self.ag = nmin_ag
-            return nmin, psf
+            self.save(nmin)
+            return self
 
-        if list(nmin_ag.getNames()) == list(self.ag.getNames()):
-            pass  # TODO: fill this
+        if nmin_ag.numAtoms() == self.ag.numAtoms():
+            if list(nmin_ag.getNames()) != list(self.ag.getNames()):
+                nmin_ag = self._match_by_residue_position(self.ag, nmin_ag)
+            else:
+                nmin_ag.setCoords(self.ag.getCoordsets())
         else:
             logging.info('Molecule was altered during preparation, preparing each frame separately')
             new_csets = []
@@ -185,9 +263,11 @@ class BasePDB(object):
                 nmin_frame.remove()
                 psf_frame.remove()
 
-            nmin_ag.setCoords(np.concatenate(new_csets))
-            self.ag = nmin_ag
-            self.save(nmin)
+            nmin_ag.setCoords(np.array(new_csets))
+
+        self.ag = nmin_ag
+        self.save(nmin)
+        return self
 
     def to_rosetta(self):
         new_names = []
@@ -203,6 +283,7 @@ class BasePDB(object):
         new_names = zip(*new_names)
         self.ag.setResnames(new_names[0])
         self.ag.setNames(new_names[1])
+        return self
 
     def from_rosetta(self):
         new_names = [atom_naming.atom_alias_ros_reverse.get((r, a), (r, a)) for r, a in
@@ -211,6 +292,7 @@ class BasePDB(object):
         new_names = zip(*new_names)
         self.ag.setResnames(new_names[0])
         self.ag.setNames(new_names[1])
+        return self
 
     def his_to_hsd(self):
         ag = self.ag
@@ -230,11 +312,13 @@ class BasePDB(object):
                         new_resn = 'HSE'
                 new_resnames += [new_resn] * res.numAtoms()
             ag.setResnames(new_resnames)
+        return self
 
     def hsd_to_his(self):
         sel = self.ag.select('resname HSD HSE HSP')
         if sel:
             sel.setResnames('HIS')
+        return self
 
     def read_energy_from_pdb(self, pdb_file):
         ptn = re.compile(r'^REMARK\s+(\S+)\s+(\S+)\:\s+(-{0,1}[0-9na]+\.{0,1}[0-9]*)\s+$')
@@ -292,6 +376,29 @@ class BasePDB(object):
             rmsd.append([prody.calcRMSD(ag.select(sel))])
         rmsd = np.concatenate(rmsd)
         return rmsd
+
+    def add_mol(self, mol, keep_chains=False, keep_resi=False):
+        m1 = self
+        m2 = mol
+        assert(m1.ag.numCoordsets() == m2.ag.numCoordsets())
+
+        buf = StringIO()
+        for i in range(m1.ag.numCoordsets()):
+            buf.write('MODEL\n')
+            prody.writePDBStream(buf, m1.ag, csets=i)
+            prody.writePDBStream(buf, m2.ag, csets=i)
+            buf.write('ENDMDL\n')
+
+        buf.seek(0)
+        joint = prody.parsePDBStream(buf)
+        buf.close()
+
+        joint = BasePDB(ag=joint)
+        joint.renumber(keep_chains=keep_chains, keep_resi=keep_resi)
+        return joint
+
+    def __add__(self, mol):
+        return self.add_mol(mol)
 
 
 class MHCIAllele(object):

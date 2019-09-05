@@ -29,6 +29,7 @@ import scipy.stats as stats
 
 from path import Path
 
+
 def cuda_is_avail():
     logging.info("Checking CUDA availability ...")
     avail = torch.cuda.is_available()
