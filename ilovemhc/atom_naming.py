@@ -1165,31 +1165,3 @@ hbond_acceptors = frozenset((
 atom_alias = atom_alias_gromos
 residue_atoms = residue_atoms_gromos
 residue_bonds = residue_bonds_gromos
-
-
-def convert_from_rosetta(pdb, out=None):
-    new_lines = []
-    with open(pdb, 'r') as fin:
-        for L in fin:
-            if not L.startswith('ATOM  '):
-                new_lines.append(L)
-                continue
-            else:
-                resn, atomn = L[17:20], L[12:16].strip()
-                k = (resn, atomn)
-
-                if k in atom_alias_ros_reverse:
-                    resn, atomn = atom_alias_ros_reverse[(resn, atomn)]
-                atomn = '%4s' % ('%-3s' % atomn)
-                L = list(L)
-                L[17:20] = resn
-                L[12:16] = atomn
-                L = ''.join(L)
-            new_lines.append(L)
-
-    if out is None:
-        out = pdb
-
-    with open(out, 'w') as fout:
-        for line in new_lines:
-            fout.write(line)
