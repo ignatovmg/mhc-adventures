@@ -148,7 +148,7 @@ def get_pseudo_sequence(seq, refseq, resilist):
     for a1, a2 in zip(aln1, aln2):
         if a1 != '-':
             refseq_counter += 1
-            if contacting_set[pseudo_counter] == refseq_counter:
+            if resilist[pseudo_counter] == refseq_counter:
                 pseudo_counter += 1
                 pseq.append(a2)
                 if pseudo_counter >= pseqlen:
