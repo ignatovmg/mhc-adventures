@@ -377,6 +377,28 @@ class BasePDB(object):
         rmsd = np.concatenate(rmsd)
         return rmsd
 
+    def calc_rmsd_with(self, mol, align=False, sel='all'):
+        ag1 = self.ag.copy()
+        ag2 = mol.ag.copy()
+        sel1 = ag1.select(sel).copy()
+        sel2 = ag2.select(sel).copy()
+        if sel1 is None or sel2 is None:
+            raise RuntimeError('Selection is empty')
+        if sel1.numAtoms() != sel2.numAtoms():
+            raise RuntimeError('Selections are different')
+
+        merged = np.concatenate([sel1.getCoordsets(), sel2.getCoordsets()])
+        n1, n2 = sel1.numCoordsets(), sel2.numCoordsets()
+        sel1.setCoords(merged)
+        rmsd = []
+        for i in range(n1):
+            sel1.setACSIndex(i)
+            if align:
+                prody.alignCoordsets(sel1)
+            rmsd.append([prody.calcRMSD(sel1)[n1:]])
+        rmsd = np.concatenate(rmsd)
+        return rmsd
+
     def add_mol(self, mol, keep_chains=False, keep_resi=False):
         m1 = self
         m2 = mol
@@ -485,7 +507,3 @@ class PeptidePDB(ProcessedPDB):
         self.pdb_seq = _line['peptide']
         self.seq_len = len(self.pdb_seq)
 
-
-class MultiModelPDB(BasePDB):
-    def __init__(self, pdb_file):
-        BasePDB.__init__(self, pdb_file)
