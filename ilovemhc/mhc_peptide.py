@@ -3,8 +3,7 @@ import prody
 import re
 import numpy as np
 import logging
-import os
-import tempfile
+
 from glob import glob
 from path import Path
 from StringIO import StringIO
@@ -15,11 +14,13 @@ from . import utils
 from . import atom_naming
 from . import wrappers
 
+logger = define.logger
+
 _GDOMAINS_TABLE = pd.read_csv(define.TEMPLATE_MODELLER_DEFAULT_TABLE, index_col=0)
 
-_GDOMAINS_DIR = define.GDOMAINS_DIR
-
 _ALLELE_TABLE = pd.read_csv(define.ALLELE_SEQUENCES_CSV, sep=' ', index_col=1)
+
+_GDOMAINS_DIR = define.GDOMAINS_DIR
 
 
 class BasePDB(object):
@@ -68,7 +69,7 @@ class BasePDB(object):
         return self
 
     def copy(self):
-        new = BasePDB(ag=self.ag)
+        new = BasePDB(ag=self.ag.copy())
         if not self.energy_table is None:
             new.energy_table = self.energy_table.copy()
         return new
@@ -81,6 +82,13 @@ class BasePDB(object):
         if type(csets) == list:
             return csets
         raise TypeError('Wrong type of csets')
+
+    def get_sequence(self):
+        cas = self.ag.select('name CA')
+        if cas is None:
+            raise RuntimeError("Atom group doesn't CA atoms")
+
+        return ''.join([atom_naming.d_1aa.get(x, 'X') for x in cas.getResnames()])
 
     def reduce(self, trim_first=True, csets=None):
         output = []
@@ -121,7 +129,7 @@ class BasePDB(object):
 
         self.ag = prody.parsePDBStream(StringIO(''.join(output)))
         self.renumber()
-        return output
+        return self
 
     def save(self, pdb, **kwargs):
         if not pdb.endswith('.pdb'):
@@ -132,6 +140,7 @@ class BasePDB(object):
         ag.setNames(new_names)
 
         prody.writePDB(pdb, ag, **kwargs)
+        return pdb
 
     def save_sep(self, dirname, **kwargs):
         dirname = Path(dirname)
@@ -145,7 +154,7 @@ class BasePDB(object):
 
         return flist
 
-    def prepare_pdb22_one_frame(self,
+    def _prepare_pdb22_one_frame(self,
                                 out_prefix,
                                 cset=0,
                                 rtf=define.RTF22_FILE,
@@ -238,7 +247,7 @@ class BasePDB(object):
     def prepare_pdb22(self, out_prefix, csets=None, **kwargs):
         csets = self._make_csets(csets)
 
-        nmin, psf = self.prepare_pdb22_one_frame(out_prefix, **kwargs)
+        nmin, psf = self._prepare_pdb22_one_frame(out_prefix, **kwargs)
         nmin_ag = prody.parsePDB(nmin)
 
         if len(csets) == 1:
@@ -267,7 +276,7 @@ class BasePDB(object):
 
         self.ag = nmin_ag
         self.save(nmin)
-        return self
+        return nmin, psf
 
     def to_rosetta(self):
         new_names = []
@@ -400,6 +409,9 @@ class BasePDB(object):
         return rmsd
 
     def add_mol(self, mol, keep_chains=False, keep_resi=False):
+        """
+        This behaves bad when molecules have same chain names
+        """
         m1 = self
         m2 = mol
         assert(m1.ag.numCoordsets() == m2.ag.numCoordsets())
@@ -425,19 +437,19 @@ class BasePDB(object):
 
 class MHCIAllele(object):
     def __init__(self, allele):
-        self.allele = allele
+        self.name = allele
 
     @property
     def allele_seq(self):
-        return _ALLELE_TABLE.loc[self.allele, 'sequence']
+        return _ALLELE_TABLE.loc[self.name, 'sequence']
 
     @property
     def allele_pseq_nielsen(self):
-        return _ALLELE_TABLE.loc[self.allele, 'pseudo_nielsen']
+        return _ALLELE_TABLE.loc[self.name, 'pseudo_nielsen']
 
     @property
     def allele_pseq_custom(self):
-        return _ALLELE_TABLE.loc[self.allele, 'pseudo_custom']
+        return _ALLELE_TABLE.loc[self.name, 'pseudo_custom']
 
     def allele_pseq_nielsen_compute(self):
         return utils.get_pseudo_sequence(self.allele_seq, utils.nielsen_ref_seq, utils.nielsen_residue_set)
@@ -446,64 +458,56 @@ class MHCIAllele(object):
         return utils.get_pseudo_sequence(self.allele_seq, utils.custom_ref_seq, utils.contacting_set)
 
 
-class ProcessedPDB(BasePDB):
-    def __init__(self, pdb_id, pdb_file):
-        BasePDB.__init__(self, pdb_file)
-
-        self.pdb_id = pdb_id
-        self.pdb_seq = ''
-        self.seq_len = 0
-
-
-class MHCIPDB(ProcessedPDB, MHCIAllele):
+class MHCIPDB(object):
     def __init__(self, pdb_id):
         if pdb_id not in _GDOMAINS_TABLE.index:
             raise RuntimeError('PDB ID %s in not in Gdomains table' % pdb_id)
 
-        pdb_file = Path(_GDOMAINS_DIR).joinpath(pdb_id + '_mhc_ah.pdb')
-        ProcessedPDB.__init__(self, pdb_id, pdb_file)
-
+        self.pdb_id = pdb_id
+        self.path = Path(_GDOMAINS_DIR).joinpath(pdb_id + '_mhc_ah.pdb')
+        self.mol = BasePDB(self.path)
         self._line = _GDOMAINS_TABLE.loc[pdb_id, :]
-        self.pdb_seq = self._line['mhc_seq']
-        self.seq_len = len(self.pdb_seq)
-        MHCIAllele.__init__(self, self._line['allele'])
 
-    @property
-    def pdb_pseq_nielsen(self):
-        return self._line['pseudo_nielsen']
-
-    @property
-    def pdb_pseq_custom(self):
-        return self._line['pseudo_custom']
+        self.seq = self._line['mhc_seq']
+        self.len = len(self.seq)
+        self.allele = MHCIAllele(self._line['allele'])
+        self.allele_long = self._line['allele_long']
+        self.ref_aln = self._line['ref_aln']
+        self.seq_aln = self._line['seq_aln']
+        self.resi_orig = self._line['resi_orig']
+        self.resi_aln = self._line['resi_aln']
+        self.pseudo_custom = self._line['pseudo_custom']
+        self.pseudo_nielsen = self._line['pseudo_nielsen']
 
     def pdb_pseq_nielsen_compute(self):
         """
         Get Nielsen pseudo sequence (34aa)
         :returns: Tuple(sequence, residue_id_list)
         """
-        if self.pdb_seq is None:
+        if self.seq is None:
             return RuntimeError('Sequence is empty')
-        return utils.get_pseudo_sequence(self.pdb_seq, utils.nielsen_ref_seq, utils.nielsen_residue_set)
+        return utils.get_pseudo_sequence(self.seq, utils.nielsen_ref_seq, utils.nielsen_residue_set)
 
     def pdb_pseq_custom_compute(self):
         """
         Get custom pseudo sequence
         :returns: Tuple(sequence, residue_id_list)
         """
-        if self.pdb_seq is None:
+        if self.seq is None:
             return RuntimeError('Sequence is empty')
-        return utils.get_pseudo_sequence(self.pdb_seq, utils.custom_ref_seq, utils.contacting_set)
+        return utils.get_pseudo_sequence(self.seq, utils.custom_ref_seq, utils.contacting_set)
 
 
-class PeptidePDB(ProcessedPDB):
+class PeptidePDB(object):
     def __init__(self, pdb_id):
         if pdb_id not in _GDOMAINS_TABLE.index:
             raise RuntimeError('PDB ID %s in not in Gdomains table' % pdb_id)
 
-        pdb_file = Path(_GDOMAINS_DIR).joinpath(pdb_id + '_pep_ah.pdb')
-        super(PeptidePDB, self).__init__(pdb_id, pdb_file)
+        self.pdb_id = pdb_id
+        self.path = Path(_GDOMAINS_DIR).joinpath(pdb_id + '_pep_ah.pdb')
+        self.mol = BasePDB(self.path)
+        self._line = _GDOMAINS_TABLE.loc[pdb_id, :]
 
-        _line = _GDOMAINS_TABLE.loc[pdb_id, :]
-        self.pdb_seq = _line['peptide']
-        self.seq_len = len(self.pdb_seq)
-
+        self.seq = self._line['peptide']
+        self.len = len(self.seq)
+        #self.cluster = self._line['peptide_cluster']

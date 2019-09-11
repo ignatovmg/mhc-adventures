@@ -1,4 +1,3 @@
-import glob
 import os
 import pandas as pd
 import sys
@@ -7,14 +6,14 @@ import sys
 # In[3]:
 
 
-from utils import merge_two
-from wrappers import remove_files
+from .utils import merge_two
+from .wrappers import remove_files
 
 
 # In[4]:
 
 
-import define
+from . import define
 
 if define.PLIP_DIR not in sys.path:
     sys.path.append(define.PLIP_DIR)

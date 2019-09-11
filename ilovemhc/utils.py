@@ -1,24 +1,18 @@
-import os
-import sys
 import numpy as np
 import pandas as pd
 import glob
-import shutil
 import re
-import logging
 from itertools import product
-import subprocess
 from subprocess import Popen, PIPE, STDOUT
 from path import Path
 
 import Bio
 from Bio.SubsMat import MatrixInfo as matlist
 from Bio.pairwise2 import format_alignment
-from Bio.SeqUtils import seq3
 import prody
 
-import define
-from wrappers import *
+from . import define
+from .wrappers import *
 
 nielsen_residue_set = [7, 9, 24, 45, 59, 62, 63, 66, 67, 69, 70, 73, 74, 76, 77, 80, 81, 84, 95, 97, 99, 114, 116, 118,
                        143, 147, 150, 152, 156, 158, 159, 163, 167, 171]

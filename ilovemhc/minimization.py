@@ -1,3 +1,5 @@
+# TODO: reformat this mess to a proper class
+
 from ilovemhc import utils, define, wrappers
 from path import Path
 import numpy as np

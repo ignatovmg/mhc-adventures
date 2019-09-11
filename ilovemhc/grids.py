@@ -1,22 +1,22 @@
 import struct
-import os
-
 import numpy as np
 import pandas as pd
-import logging
-
 from itertools import product
-
 from gridData import Grid
 from path import Path
 
-import utils
-import define
-import molgrid
-from wrappers import *
+from . import define
+from . import molgrid
+from .wrappers import *
 
-class GridMaker():
-    def __init__(self, binpath=define.GRID_EXE, 
+
+class GridMaker(object):
+    """
+    Creates 4D numpy array from a pdb file: (property_channels, x, y, z)
+    """
+
+    def __init__(self,
+                 binpath=define.GRID_EXE,
                  namespath=define.ATOM_TYPES_DEFAULT, 
                  propspath=define.ATOM_PROPERTY_DEFAULT):
         
@@ -27,6 +27,11 @@ class GridMaker():
         self.nchannels = self.prop_table.shape[1] - 2
         
     def read_grid(self, path):
+        """
+        (deprecated)
+
+        Read grid from file created by self.make_grid_file
+        """
         with open(path, 'r') as f:
             binary = f.read()
 
@@ -45,76 +50,6 @@ class GridMaker():
         array = np.array(unpk, dtype=np.float32)
 
         return dimensions, array
-    
-    def create_gif(self, grid, channel=5, thre=0.1):
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D 
-        
-        dim = grid.shape
-        nch = dim[0]
-        
-        if (channel > nch / 2):
-            raise ValueError('Channel id must be less, than %i' % (nch / 2))
-
-        counter = 1
-        png_files = []
-        
-        fig = plt.figure()
-        for angle in np.arange(0, 180, 10):
-            ax = fig.gca(projection='3d')
-
-            slic = grid[nch/2+channel, :, : ,:]
-            x = range(slic.shape[0])
-            y = range(slic.shape[1])
-            z = range(slic.shape[2])
-            coords = []
-            density = []
-            for i in x:
-                for j in y: 
-                    for k in z:
-                        if slic[i,j,k] > thre:
-                            coords.append([i,j,k])
-                            density.append(slic[i,j,k])
-            coords = np.array(coords)
-            #print coords.shape
-
-            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='r', depthshade=True, alpha=0.5)
-
-            slic = grid[channel, :, : ,:]
-
-            x = range(slic.shape[0])
-            y = range(slic.shape[1])
-            z = range(slic.shape[2])
-            coords = []
-            density = []
-            for i in x:
-                for j in y: 
-                    for k in z:
-                        if slic[i,j,k] > thre:
-                            coords.append([i,j,k])
-                            density.append(slic[i,j,k])
-            coords = np.array(coords)
-
-            #fig = plt.figure(figsize=(10,10))
-            #ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(coords[:,0], coords[:,1], coords[:,2], c='b', depthshade=True, alpha=0.5)
-            ax.view_init(60, angle)
-            
-            filename=("%03i" % counter) +'.png'
-            plt.savefig(filename, dpi=96)
-            png_files.append(filename)
-            counter += 1
-            
-        call = 'convert -delay 30 ' + ' '.join(png_files) + ' a.gif && mv a.gif a.gif.png'
-        shell_call(call, shell=True)
-        
-        call = 'rm -f ' + ' '.join(png_files)
-        shell_call(call, shell=True)
-    
-    def create_gif_from_file(self, grid_file, channel=5, thre=0.1):
-        dim, grid = self.read_grid(grid_file)
-        grid = grid.reshape(dim)
-        create_gif(self, grid, channel=5, thre=0.1)
         
     def grid_to_pdb(self, save_pdb, grid, bin_size, channel=None, use_channel_names=False):
         origin = np.array([7.473, 4.334, 7.701]) - 5.0;
@@ -180,7 +115,7 @@ class GridMaker():
                         f.write(line)
                 f.write('END\n')
                 
-    def grid_to_dx(self, save_dir, grid, bin_size, channel=None, use_channel_names=False):
+    def grid_to_dx(self, save_dir, grid, bin_size, use_channel_names=False):
         #origin = np.array([7.473, 4.334, 7.701]) - 5.0
         
         if grid.shape[0] % 2 != 0:
@@ -199,41 +134,21 @@ class GridMaker():
                     
                 g = Grid(grid[ch], origin=np.array([7.473, 4.334, 7.701]) - 5.0, delta=bin_size) 
                 g.export(Path(save_dir).joinpath(channel_name + '.dx'), 'DX')
-                
-    def draw_grid_in_jupyter_notebook(self, grid, channel, thre):
-        from IPython.display import Image
-        
-        if self.create_gif(grid, channel=channel, thre=thre) == 0:
-            return Image(filename="a.gif.png")
-        return 1
     
     # this one uses direct binding of C++ code, so better to use this one
     def make_grid(self, inputpdb, binsize):
-        #if hsd2his:
-        #    tmp_file = inputpdb + '.tmp.' + str(os.getpid())
-        #    utils.hsd2his(inputpdb, tmp_file)
-        #else:
-        #    tmp_file = inputpdb
-            
+        """
+        Make grid using C binding. Returns numpy.array
+        """
         grid = molgrid.make_grid(inputpdb, self.properties_file, self.types_file, binsize, self.nchannels)
-        
-        #if hsd2his and remove_tmp:
-        #    remove_files([tmp_file])
-            
         return grid
     
     def make_grid_file(self, savepath, inputpdb, binsize):
-        #if hsd2his:
-        #    tmp_file = inputpdb + '.tmp.' + str(os.getpid())
-        #    utils.hsd2his(inputpdb, tmp_file)
-        #else:
-        #    tmp_file = inputpdb
-        
+        """
+        (deprecated)
+
+        Make grid (binary format) and write it to savepath
+        """
         call = [self.grid_bin, inputpdb, self.properties_file, self.types_file, str(binsize), str(self.nchannels), savepath]
         output = shell_call(call)
-                
-        #if hsd2his and remove_tmp:
-        #    remove_files([tmp_file])
-            
         return output
-    

@@ -14,12 +14,10 @@ from path import Path
 from Bio.SeqUtils import seq1, seq3
 from Bio.Alphabet.IUPAC import IUPACProtein
 
-from ilovemhc import define, wrappers
-from ilovemhc.mhc_peptide import BasePDB
+from . import define, wrappers
+from .mhc_peptide import BasePDB
 
-import logging
-logger = logging.getLogger(__name__)
-
+logger = define.logger
 
 _chimera_script = '''open {0}
 write format {1} atomTypes sybyl 0 {2}
@@ -115,6 +113,7 @@ class PeptideSampler(object):
 
     def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True):
         self.wdir = Path(wdir)
+        self.wdir.mkdir_p()
         self.prepare = prepare
 
         self._seq_file = self.wdir.joinpath('seq_file')
@@ -147,6 +146,7 @@ class PeptideSampler(object):
             if not pep is None and not isinstance(pep, prody.AtomGroup):
                 logger.info('Reading starting peptide from pdb')
                 self.pep = prody.parsePDB(pep)
+                self.pep_seq = BasePDB(ag=self.pep).get_sequence()
 
         # prepare peptide
         if prepare:
@@ -161,6 +161,7 @@ class PeptideSampler(object):
 
         # sampled peptides will be here
         self.brikard = None
+        self.brikard_raw_file = None
 
     def clean(self):
         self._seq_file.remove_p()
@@ -240,7 +241,7 @@ class PeptideSampler(object):
         self._generate_sidechains_scwrl()
         return self.pep
 
-    def run_brikard(self, N, resin, resic, nrot=1, vdw=0.3, seed=123, rec_resi_list=None, restrictions=None):
+    def _run_brikard(self, N, resin, resic, nrot=1, vdw=0.3, seed=123, rec_resi_list=None, restrictions=None):
         # pivots = (resin + 1, (resin + resic) / 2, resic - 1)
         outdir = self.wdir
         oldpwd = Path.getcwd()
@@ -350,7 +351,7 @@ class PeptideSampler(object):
             for i, r in enumerate(merged.ag.iterResidues(), 1):
                 r.setResnum(i)
             merged.ag.setChids('A')
-            merged.ag.setSerials(range(1, merged.ag.numAtoms()+1))
+            merged.ag.setSerials(range(1, merged.ag.numAtoms() + 1))
             merged = merged.ag
         else:
             merged = pep.renumber(keep_resi=False).ag
@@ -394,6 +395,9 @@ class PeptideSampler(object):
         Find disulfide bonds by distances between SG atoms
         """
         cys_sg = ag.select('resname CYS and name SG')
+        if cys_sg is None:
+            return []
+
         crds = cys_sg.getCoords()
         dmat = np.array([[np.sqrt(((i - j) ** 2).sum()) for j in crds] for i in crds])
         pairs = zip(*map(list, np.where(dmat < self._disu_dist)))
@@ -412,7 +416,7 @@ class PeptideSampler(object):
         self._prepare_for_sampling()
 
         # identify peptide residue ids in the merged structure
-        residues = map(int, self._input.select('name CA').getResnums()[-len(self.pep_seq):])
+        residues = map(int, self._input.select('name CA').getResnums()[-self.pep_len:])
         resin = residues[0]  # N-terminus
         resic = residues[-1]  # C-terminus
 
@@ -427,13 +431,14 @@ class PeptideSampler(object):
             # dont sample disulfide bonds
             if auto_disu:
                 disu_pairs = self._find_disu_bonds(self._input)
-                resi_exclude = list(set(reduce(lambda x, y: list(x) + list(y), disu_pairs)))
-                sel = sel.select('not resnum ' + ' '.join(map(str, resi_exclude)))
+                if disu_pairs:
+                    resi_exclude = list(set(reduce(lambda x, y: list(x) + list(y), disu_pairs)))
+                    sel = sel.select('not resnum ' + ' '.join(map(str, resi_exclude)))
 
             if sel:
                 sample_resi_list = list(sel.getResnums())
 
-        restrictions = { #  TODO: add restrictions
+        restrictions = {  # TODO: add restrictions
             # (1, 2): '(-180 -150 75 180 0.2)',  # [-180., -160., 75., 180.],
             # (2, 1): '-160 -40',  # [-115., -40.],
             # (2, 2): '(-180 -160 120 180 0.2)',  # [-180., -160., 120., 180.],
@@ -446,19 +451,19 @@ class PeptideSampler(object):
             # (nres - 1, 1): '-165 -30',  # [-165, -30.],
             # (nres - 2, 1): '-175 -30'  # [-175, -30.]
         }
-        restrictions = {(residues[resi-1], tor): v for (resi, tor), v in restrictions.iteritems()}
+        restrictions = {(residues[resi - 1], tor): v for (resi, tor), v in restrictions.iteritems()}
 
         for _vdw in reversed(list(np.arange(vdw_min, vdw_max + 0.0001, 0.05))):
             logger.info("Trying VDW %.3f" % _vdw)
 
-            self.run_brikard(nsamples,
-                             resin,
-                             resic,
-                             nrot=nrotamers,
-                             vdw=_vdw,
-                             seed=seed,
-                             rec_resi_list=sample_resi_list,
-                             restrictions=restrictions)
+            self._run_brikard(nsamples,
+                              resin,
+                              resic,
+                              nrot=nrotamers,
+                              vdw=_vdw,
+                              seed=seed,
+                              rec_resi_list=sample_resi_list,
+                              restrictions=restrictions)
 
             if self.brikard is not None:
                 logger.info('Fixing names and chains in output structures')
