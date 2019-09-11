@@ -1,6 +1,7 @@
 import subprocess
 import os
 import logging
+import shutil
 
 
 def file_is_empty(path):
@@ -34,8 +35,9 @@ def shell_call(call, shell=False, *args, **kwargs):
     try:
         logging.debug('Command executed: ' + cmd_string)
         output = subprocess.check_output(call, shell=shell, *args, **kwargs)
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
         logging.exception(e)
+        logging.debug(e.output)
         raise
     
     logging.debug('Command output: ')
@@ -51,3 +53,10 @@ def remove_files(path_list):
 def tmp_file_name(ext=''):
     name = ('tmp-%i' % os.getpid()) + ext
     return name
+
+
+def rmdir(dirname):
+    try:
+        shutil.rmtree(dirname)
+    except:
+        pass

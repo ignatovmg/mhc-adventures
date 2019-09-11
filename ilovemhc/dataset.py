@@ -1,16 +1,9 @@
-import pandas as pd
 import numpy as np
-import os
-import traceback
-import logging
-
 import torch
 from torch.utils.data import Dataset
 
-from wrappers import *
-import utils
-import grids
-import molgrid
+from .wrappers import *
+from . import grids
 
 
 def scale_func_sigmoid(break_point=1.2, steepness=3.):

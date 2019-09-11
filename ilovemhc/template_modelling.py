@@ -1,7 +1,3 @@
-import utils
-import define
-from wrappers import *
-
 import pandas as pd
 import numpy as np
 
@@ -10,10 +6,12 @@ from Bio.SubsMat import MatrixInfo as matlist
 from Bio.pairwise2 import format_alignment
 from Bio.SeqUtils import seq3
 
-import pymol
 from pymol import cmd
 
-import subprocess as sbs
+from . import utils
+from . import define
+from .wrappers import *
+
 import logging
 
 
