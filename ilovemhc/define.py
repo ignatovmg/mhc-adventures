@@ -27,6 +27,8 @@ ATOM_TYPES_DEFAULT = ATOM_TYPES22_FILE
 # executables
 PDBPREP_EXE = os.path.join(PDB_PREP_DIR, 'pdbprep.pl')
 PDBNMD_EXE = os.path.join(PDB_PREP_DIR, 'pdbnmd.pl')
+PSFGEN_EXE = os.path.join(PDB_PREP_DIR, 'psfgen')
+NMIN_EXE = os.path.join(PDB_PREP_DIR, 'nmin')
 GRID_EXE = os.path.join(BIN_DIR, 'property_grid')
 
 # misc
