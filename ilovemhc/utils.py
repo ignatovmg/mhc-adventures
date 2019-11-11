@@ -666,7 +666,7 @@ def prepare_pdb22(pdb,
         call = [define.PDBPREP_EXE, tmp_file]
         shell_call(call)
 
-        call = [define.PDBNMD_EXE, tmp_file, '--rtf=%s' % rtf, '--prm=%s' % prm]
+        call = [define.PDBNMD_EXE, basename, '--rtf=%s' % rtf, '--prm=%s' % prm, '--psfgen=' + define.PSFGEN_EXE, '--nmin=' + define.NMIN_EXE]
         #if patch_chains:
         #    call += ['--first', ','.join(['nter'] + [x.lower() for x in patch_chains])]
         #    call += ['--last',  ','.join(['cter'] + [x.lower() for x in patch_chains])]
