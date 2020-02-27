@@ -111,7 +111,7 @@ class PeptideSampler(object):
     _vdw_min = 0.0  # min vdw threshold to accept during sampling
     _sampling_init_timeout = 5 * 60
 
-    def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True):
+    def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True, template="9mer.pdb"):
         self.wdir = Path(wdir)
         self.wdir.mkdir_p()
         self.prepare = prepare
@@ -124,7 +124,6 @@ class PeptideSampler(object):
         self._chim_file = self.wdir.joinpath('chimera.cmd')
         self._brikard_file = self.wdir.joinpath('brikard.pdb')
         self._a_file = self.wdir.joinpath('a.mhc')
-
         self.rec = rec
         if not rec is None and not isinstance(rec, prody.AtomGroup):
             # prepare receptor
@@ -140,7 +139,8 @@ class PeptideSampler(object):
             self._check_sequence(pep_seq)
 
             # make peptide starting conformation
-            self.make_pep_from_seq()
+            self.make_pep_from_seq_custom(template)
+            #self.make_pep_from_seq()
         else:
             self.pep = pep
             if not pep is None and not isinstance(pep, prody.AtomGroup):
@@ -185,6 +185,18 @@ class PeptideSampler(object):
             if a not in IUPACProtein.letters:
                 raise RuntimeError('Residue %s is not a standard amino acid' % a)
 
+    def _generate_template_custom(self, name):
+        bbnames = ['C', 'O', 'CA', 'N', 'OXT']
+        lgt = len(self.pep_seq)
+        tpl = Path(define.PEPTIDE_TEMPLATES_DIR).joinpath(name)
+        tpl = prody.parsePDB(tpl)
+
+        for r, newname in zip(tpl.iterResidues(), self.pep_seq):
+            r.setResname(seq3(newname).upper())
+        tpl = tpl.select('name ' + ' '.join(bbnames)).copy()
+        tpl.setChids('B')
+        self._tpl = tpl
+                
     def _generate_template(self):
         bbnames = ['C', 'O', 'CA', 'N', 'OXT']
         lgt = len(self.pep_seq)
@@ -233,6 +245,15 @@ class PeptideSampler(object):
         pep = BasePDB(ag=pep.select('chain B').copy()).renumber(keep_resi=False).ag
         self.pep = pep
 
+    def make_pep_from_seq_custom(self, template):
+        """
+        Create peptide from sequence and put it in self.pep
+        """
+        self._generate_template_custom(template)
+        self._generate_sidechains_scwrl()
+        return self.pep
+        
+        
     def make_pep_from_seq(self):
         """
         Create peptide from sequence and put it in self.pep
@@ -311,16 +332,20 @@ class PeptideSampler(object):
                         logger.info('Couldn\'t find the first lead in 5 minutes, decrease VDW penalty')
                         process.kill()
 
-            brikard_raw = glob('mol_000001*.pdb')
+            brikard_raw = glob('mol_0*.pdb')
             if len(brikard_raw) == 0:
-                logger.warning('No sampled structures found (mol_000001*.pdb)')
+                logger.warning('No sampled structures found (mol_0*.pdb)')
                 oldpwd.chdir()
                 return
-
-            brikard_raw = brikard_raw[0]
-            logger.info('Using %s' % brikard_raw)
-            self.brikard_raw_file = outdir.joinpath(Path(brikard_raw))
-            self.brikard = prody.parsePDB(brikard_raw)
+            with open('mol.pdb', 'w') as outfile:
+                for fname in brikard_raw:
+                    with open(fname) as infile:
+                        for line in infile:
+                            outfile.write(line)
+                            
+            logger.info('Using %s' % ", ".join(brikard_raw))
+            self.brikard_raw_file = outdir.joinpath(Path('mol.pdb'))
+            self.brikard = prody.parsePDB('mol.pdb')
 
         except Exception:
             oldpwd.chdir()

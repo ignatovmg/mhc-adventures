@@ -30,15 +30,15 @@ class BasePDB(object):
         self.energy_table = None
 
         if not pdb_file is None:
-            self.ag = prody.parsePDB(pdb_file)
+            self.ag = prody.parsePDB(pdb_file, chain='B')
             if read_energy:
                 self.energy_table = self.read_energy_from_pdb(pdb_file)
 
         elif not pdb_list is None:
-            ag_first = prody.parsePDB(pdb_list[0])
+            ag_first = prody.parsePDB(pdb_list[0], chain='B')
             new_csets = []
             for f in pdb_list:
-                ag = prody.parsePDB(f)
+                ag = prody.parsePDB(f, chain='B')
                 assert (list(ag.getNames()) == list(ag_first.getNames()))
                 new_csets.append(ag.getCoords())
             ag_first.setCoords(np.array(new_csets))
@@ -171,6 +171,7 @@ class BasePDB(object):
             prm = Path(prm).abspath()
 
             basename = Path(pdb.basename().lower())
+            
             dirname = pdb.dirname()
             dirname.chdir()
 
@@ -180,7 +181,7 @@ class BasePDB(object):
 
             call = [define.PDBPREP_EXE, basename]
             wrappers.shell_call(call)
-
+            
             call = [define.PDBNMD_EXE, basename, '--rtf=%s' % rtf, '--prm=%s' % prm, '--psfgen=' + define.PSFGEN_EXE, '--nmin=' + define.NMIN_EXE]
             # if patch_chains:
             #    call += ['--first', ','.join(['nter'] + [x.lower() for x in patch_chains])]
@@ -189,6 +190,7 @@ class BasePDB(object):
                 call += ['--default-patch']
 
             call += ['?']
+            #logger.error("AAAAAAAAAAAA {}".format(call))
             wrappers.shell_call(call)
 
             nmin = Path(basename.stripext() + '_nmin.pdb')
@@ -248,7 +250,7 @@ class BasePDB(object):
         csets = self._make_csets(csets)
 
         nmin, psf = self._prepare_pdb22_one_frame(out_prefix, **kwargs)
-        nmin_ag = prody.parsePDB(nmin)
+        nmin_ag = prody.parsePDB(nmin, chain = 'B')
 
         if len(csets) == 1:
             self.ag = nmin_ag
@@ -265,7 +267,7 @@ class BasePDB(object):
             new_csets = []
             for cset in csets:
                 nmin_frame, psf_frame = self.prepare_pdb22_one_frame(out_prefix + '-%i-tmp' % cset, cset=0, **kwargs)
-                ag_frame = prody.parsePDB(nmin_frame)
+                ag_frame = prody.parsePDB(nmin_frame, chain = 'B')
                 assert (list(nmin_ag.getNames()) == list(ag_frame.getNames()))
 
                 new_csets.append(ag_frame.getCoords())
@@ -393,7 +395,10 @@ class BasePDB(object):
         sel2 = ag2.select(sel).copy()
         if sel1 is None or sel2 is None:
             raise RuntimeError('Selection is empty')
+        
         if sel1.numAtoms() != sel2.numAtoms():
+            #nmin1, psf1 = self.prepare_pdb22(sel1)
+            #nmin2, psf2 = self.prepare_pdb22(sel2)
             raise RuntimeError('Selections are different')
 
         merged = np.concatenate([sel1.getCoordsets(), sel2.getCoordsets()])
