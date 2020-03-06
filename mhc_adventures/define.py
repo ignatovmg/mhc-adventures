@@ -1,10 +1,12 @@
 import os
 import logging.config
 from path import Path
-from .utils import read_json
+import json
+
 
 PACKAGE_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
-_VARS = read_json(PACKAGE_ROOT / '..' / 'vars.json')
+with open(PACKAGE_ROOT / '..' / 'vars.json', 'r' ) as f:
+    _VARS = json.load(f)
 
 # logging
 LOGGING_CONF = PACKAGE_ROOT.dirname() / 'logging.conf'
