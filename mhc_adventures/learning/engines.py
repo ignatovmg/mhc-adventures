@@ -8,10 +8,10 @@ from torch.utils.data import Dataset, DataLoader
 
 from sklearn.metrics import roc_auc_score
 
-from wrappers import *
-import utils
-import grids
-import dataset
+from ..wrappers import *
+from .. import utils
+from .. import grids
+from . import dataset
 
 import ignite
 from ignite.engine.engine import Engine, State, Events

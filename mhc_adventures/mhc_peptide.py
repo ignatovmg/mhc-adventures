@@ -6,7 +6,7 @@ import logging
 
 from glob import glob
 from path import Path
-from StringIO import StringIO
+from io import StringIO
 from subprocess import Popen, PIPE, STDOUT
 
 from . import define
@@ -26,13 +26,10 @@ _GDOMAINS_DIR = define.GDOMAINS_DIR
 class BasePDB(object):
     _chain_order = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
-    def __init__(self, pdb_file=None, pdb_list=None, ag=None, read_energy=False):
-        self.energy_table = None
+    def __init__(self, pdb_file=None, pdb_list=None, ag=None):
 
         if not pdb_file is None:
             self.ag = prody.parsePDB(pdb_file)
-            if read_energy:
-                self.energy_table = self.read_energy_from_pdb(pdb_file)
 
         elif not pdb_list is None:
             ag_first = prody.parsePDB(pdb_list[0])
@@ -53,7 +50,7 @@ class BasePDB(object):
     def __getattr__(self, name):
         return self.ag.__getattribute__(name)
 
-    def renumber(self, keep_resi=True, keep_chains=True):
+    def renumber_residues(self, keep_resi=True, keep_chains=True):
         self.ag.setSerials(range(1, self.ag.numAtoms() + 1))
 
         if not keep_chains and self.ag.numChains() > len(self._chain_order):
@@ -70,8 +67,6 @@ class BasePDB(object):
 
     def copy(self):
         new = BasePDB(ag=self.ag.copy())
-        if not self.energy_table is None:
-            new.energy_table = self.energy_table.copy()
         return new
 
     def _make_csets(self, csets):
@@ -84,19 +79,15 @@ class BasePDB(object):
         raise TypeError('Wrong type of csets')
 
     def get_sequence(self):
-        cas = self.ag.select('name CA')
-        if cas is None:
-            raise RuntimeError("Atom group doesn't CA atoms")
+        return self.ag.getSequence()
 
-        return ''.join([atom_naming.d_1aa.get(x, 'X') for x in cas.getResnames()])
-
-    def reduce(self, trim_first=True, csets=None):
+    def add_hydrogens(self, trim=True, csets=None):
         output = []
         natoms = -1
         csets = self._make_csets(csets)
 
         for i in csets:
-            if trim_first:
+            if trim:
                 p_start = Popen([define.REDUCE_EXE, '-Quiet', '-Trim', '-'], stdin=PIPE, stdout=PIPE, stderr=STDOUT)
                 p_finish = Popen([define.REDUCE_EXE, '-Quiet', '-FLIP', '-'], stdin=p_start.stdout, stdout=PIPE,
                                  stderr=STDOUT)
@@ -111,6 +102,10 @@ class BasePDB(object):
             reduced = []
             while p_finish.poll() is None:
                 reduced = p_finish.stdout.readlines()
+
+            p_start.wait()
+            p_finish.wait()
+            print(reduced)
 
             natoms_cur = len(filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), reduced))
             if i == csets[0]:
@@ -128,7 +123,7 @@ class BasePDB(object):
                 logging.error('Called process returned ' + str(status))
 
         self.ag = prody.parsePDBStream(StringIO(''.join(output)))
-        self.renumber()
+        self.renumber_residues()
         return self
 
     def save(self, pdb, **kwargs):
@@ -155,6 +150,46 @@ class BasePDB(object):
         return flist
 
     def _prepare_pdb22_one_frame(self,
+                                 out_prefix,
+                                 cset=0,
+                                 rtf=define.RTF22_FILE,
+                                 prm=define.PRM22_FILE,
+                                 change_his=True,
+                                 remove_tmp=True,
+                                 patch_termini=True):
+        out_prefix = Path(out_prefix).abspath()
+        rtf = Path(rtf).abspath()
+        prm = Path(prm).abspath()
+
+        with utils.isolated_filesystem():
+            if change_his:
+                self.his_to_hsd()
+            self.save('input.pdb', csets=cset)
+
+            chains = sorted(set(self.ag.getChids()))
+
+            sblu_call = ['sblu', 'pdb', 'prep',
+                         '--no-xplor-psf',
+                         '--prm', prm,
+                         '--rtf', rtf,
+                         '--no-auto-disu',
+                         '--delete-tmp',
+                         '--no-minimize',
+                         '--out-prefix', out_prefix,
+                         'input.pdb']
+
+            if patch_termini:
+                sblu_call += ['--patch-first', ','.join([x + ',CTER' for x in chains]),
+                              '--patch-last', ','.join([x + ',NTER' for x in chains])]
+
+            wrappers.shell_call(sblu_call)
+
+        if not (out_prefix + '.pdb').exists():
+            raise RuntimeError('Preparation failed')
+
+        return out_prefix + '.pdb', out_prefix + '.psf'
+
+    def _prepare_pdb22_one_frame_old(self,
                                 out_prefix,
                                 cset=0,
                                 rtf=define.RTF22_FILE,
@@ -181,7 +216,11 @@ class BasePDB(object):
             call = [define.PDBPREP_EXE, basename]
             wrappers.shell_call(call)
 
-            call = [define.PDBNMD_EXE, basename, '--rtf=%s' % rtf, '--prm=%s' % prm, '--psfgen=' + define.PSFGEN_EXE, '--nmin=' + define.NMIN_EXE]
+            call = [define.PDBNMD_EXE, basename,
+                    '--rtf=%s' % rtf,
+                    '--prm=%s' % prm,
+                    '--psfgen=' + define.PSFGEN_EXE,
+                    '--nmin=' + define.NMIN_EXE]
             # if patch_chains:
             #    call += ['--first', ','.join(['nter'] + [x.lower() for x in patch_chains])]
             #    call += ['--last',  ','.join(['cter'] + [x.lower() for x in patch_chains])]
@@ -264,7 +303,7 @@ class BasePDB(object):
             logging.info('Molecule was altered during preparation, preparing each frame separately')
             new_csets = []
             for cset in csets:
-                nmin_frame, psf_frame = self.prepare_pdb22_one_frame(out_prefix + '-%i-tmp' % cset, cset=0, **kwargs)
+                nmin_frame, psf_frame = self._prepare_pdb22_one_frame(out_prefix + '-%i-tmp' % cset, cset=0, **kwargs)
                 ag_frame = prody.parsePDB(nmin_frame)
                 assert (list(nmin_ag.getNames()) == list(ag_frame.getNames()))
 
@@ -289,7 +328,7 @@ class BasePDB(object):
                 rname, aname = atom_naming.atom_alias_ros[(rname, aname)]
             new_names.append((rname, aname))
 
-        new_names = zip(*new_names)
+        new_names = list(zip(*new_names))
         self.ag.setResnames(new_names[0])
         self.ag.setNames(new_names[1])
         return self
@@ -298,7 +337,7 @@ class BasePDB(object):
         new_names = [atom_naming.atom_alias_ros_reverse.get((r, a), (r, a)) for r, a in
                      zip(self.ag.getResnames(), self.ag.getNames())]
 
-        new_names = zip(*new_names)
+        new_names = list(zip(*new_names))
         self.ag.setResnames(new_names[0])
         self.ag.setNames(new_names[1])
         return self
@@ -328,45 +367,6 @@ class BasePDB(object):
         if sel:
             sel.setResnames('HIS')
         return self
-
-    def read_energy_from_pdb(self, pdb_file):
-        ptn = re.compile(r'^REMARK\s+(\S+)\s+(\S+)\:\s+(-{0,1}[0-9na]+\.{0,1}[0-9]*)\s+$')
-        cols = ['MODEL_ID', 'LINE']
-        with open(pdb_file, 'r') as f:
-            # get the names of all recorded energy fields from the first model
-            for line in f:
-                m = ptn.match(line)
-                if m:
-                    cols.append((m.group(1) + '_' + m.group(2)).upper())
-                if line.startswith('ATOM') or line.startswith('HETATM'):
-                    break
-
-            # run through all the models and record energy values
-            f.seek(0)
-            rows = []
-            mdli = 1
-            for linei, line in enumerate(f):
-                if line.startswith('MODEL'):
-                    row = [mdli, linei]
-                    mdli += 1
-                    continue
-
-                m = ptn.match(line)
-                if m:
-                    row.append(float(m.group(3)))
-
-                if line.startswith('END'):
-                    rows.append(row)
-                    row = []
-
-        energy_table = pd.DataFrame(rows, columns=cols)
-
-        nmodels = self.ag.numCoordsets()
-        if energy_table.shape[0] != nmodels:
-            raise RuntimeError('Number of energy values is different from the number of models (%i != %i)' %
-                               (energy_table.shape[0], nmodels))
-
-        return energy_table
 
     def calc_rmsd_to_frame(self, frame, align=False, sel='all'):
         ag = self.ag.copy()
@@ -428,11 +428,14 @@ class BasePDB(object):
         buf.close()
 
         joint = BasePDB(ag=joint)
-        joint.renumber(keep_chains=keep_chains, keep_resi=keep_resi)
+        joint.renumber_residues(keep_chains=keep_chains, keep_resi=keep_resi)
         return joint
 
     def __add__(self, mol):
         return self.add_mol(mol)
+
+
+########################## NOT USED ############################
 
 
 class MHCIAllele(object):

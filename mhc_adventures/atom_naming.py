@@ -309,7 +309,7 @@ atom_alias_ros = {
     ('TRP', 'H3'): ('TRP', '3H'),
 }
 
-atom_alias_ros_reverse = {v: k for k, v in atom_alias_ros.iteritems()}
+atom_alias_ros_reverse = {v: k for k, v in atom_alias_ros.items()}
 
 # OXT was added after conversion from residue building code.
 residue_bonds_noh = {

@@ -111,47 +111,48 @@ class PeptideSampler(object):
     _vdw_min = 0.0  # min vdw threshold to accept during sampling
     _sampling_init_timeout = 5 * 60
 
-    def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True):
+    def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True, custom_template=None):
         self.wdir = Path(wdir)
         self.wdir.mkdir_p()
         self.prepare = prepare
 
-        self._seq_file = self.wdir.joinpath('seq_file')
-        self._scw_file = self.wdir.joinpath('pep_scw.pdb')
-        self._mrg_file = self.wdir.joinpath('merged.pdb')
-        self._input_mol2_file = self.wdir.joinpath('mol.mol2')
-        self._input_pdb_file = self.wdir.joinpath('input.pdb')
-        self._chim_file = self.wdir.joinpath('chimera.cmd')
-        self._brikard_file = self.wdir.joinpath('brikard.pdb')
-        self._a_file = self.wdir.joinpath('a.mhc')
+        self._seq_file = self.wdir/'seq_file'
+        self._scw_file = self.wdir/'pep_scw.pdb'
+        self._mrg_file = self.wdir/'merged.pdb'
+        self._input_mol2_file = self.wdir/'mol.mol2'
+        self._input_pdb_file = self.wdir/'input.pdb'
+        self._chim_file = self.wdir/'chimera.cmd'
+        self._brikard_file = self.wdir/'brikard.pdb'
+        self._a_file = self.wdir/'a.mhc'
 
         self.rec = rec
-        if not rec is None and not isinstance(rec, prody.AtomGroup):
-            # prepare receptor
-            logger.info('Adding receptor')
+        if isinstance(self.rec, str):
+            logger.info('Reading receptor')
             self.rec = prody.parsePDB(rec)
-            if prepare:
+        if isinstance(self.rec, prody.AtomGroup) and prepare:
                 logger.info('Preparing receptor')
                 self.rec = BasePDB(ag=self.rec).prepare_pdb22('mhc').hsd_to_his().ag
 
+        self.pep = pep
         self.pep_seq = pep_seq
-        if not pep_seq is None:
+        self.custom_template = None if custom_template is None else Path(custom_template).abspath()
+
+        if pep_seq is not None:
             logger.info('Generating starting peptide from sequence')
             self._check_sequence(pep_seq)
-
             # make peptide starting conformation
-            self.make_pep_from_seq()
+            self._make_pep_from_seq()
         else:
-            self.pep = pep
-            if not pep is None and not isinstance(pep, prody.AtomGroup):
-                logger.info('Reading starting peptide from pdb')
-                self.pep = prody.parsePDB(pep)
+            if isinstance(self.pep, str):
+                logger.info('Reading peptide')
+                self.pep = prody.parsePDB(self.pep)
+            if isinstance(self.pep, prody.AtomGroup):
                 self.pep_seq = BasePDB(ag=self.pep).get_sequence()
-
-        # prepare peptide
-        if prepare:
-            logger.info('Preparing peptide')
-            self.pep = BasePDB(ag=self.pep).prepare_pdb22('pep').hsd_to_his().ag
+                if prepare:
+                    logger.info('Preparing peptide')
+                    self.pep = BasePDB(ag=self.pep).prepare_pdb22('pep').hsd_to_his().ag
+            else:
+                raise ValueError('Cannot load peptide')
 
         self.pep_len = self.pep.numResidues()
 
@@ -188,7 +189,10 @@ class PeptideSampler(object):
     def _generate_template(self):
         bbnames = ['C', 'O', 'CA', 'N', 'OXT']
         lgt = len(self.pep_seq)
-        tpl = Path(define.PEPTIDE_TEMPLATES_DIR).joinpath('%imer.pdb' % lgt)
+        if self.custom_template is None:
+            tpl = Path(define.PEPTIDE_TEMPLATES_DIR) / str(lgt) + 'mer.pdb'
+        else:
+            tpl = self.custom_template
         tpl = prody.parsePDB(tpl)
 
         for r, newname in zip(tpl.iterResidues(), self.pep_seq):
@@ -230,10 +234,10 @@ class PeptideSampler(object):
         pep = prody.parsePDB(self._scw_file)
 
         # extract peptide and renumber
-        pep = BasePDB(ag=pep.select('chain B').copy()).renumber(keep_resi=False).ag
+        pep = BasePDB(ag=pep.select('chain B').copy()).renumber_residues(keep_resi=False).ag
         self.pep = pep
 
-    def make_pep_from_seq(self):
+    def _make_pep_from_seq(self):
         """
         Create peptide from sequence and put it in self.pep
         """
@@ -274,7 +278,7 @@ class PeptideSampler(object):
 
             if restrictions:
                 assemble_file_content += '@RESTRICTIONS\n'
-                for (resi, torsion), limits in sorted(restrictions.iteritems()):
+                for (resi, torsion), limits in sorted(restrictions.items()):
                     assemble_file_content += '{:d} {:d} {}\n'.format(resi, torsion, limits)
 
             a_file = self._a_file.basename()
@@ -354,7 +358,7 @@ class PeptideSampler(object):
             merged.ag.setSerials(range(1, merged.ag.numAtoms() + 1))
             merged = merged.ag
         else:
-            merged = pep.renumber(keep_resi=False).ag
+            merged = pep.renumber_residues(keep_resi=False).ag
 
         prody.writePDB(self._input_pdb_file, merged)
         self._input = merged
@@ -451,7 +455,7 @@ class PeptideSampler(object):
             # (nres - 1, 1): '-165 -30',  # [-165, -30.],
             # (nres - 2, 1): '-175 -30'  # [-175, -30.]
         }
-        restrictions = {(residues[resi - 1], tor): v for (resi, tor), v in restrictions.iteritems()}
+        restrictions = {(residues[resi - 1], tor): v for (resi, tor), v in restrictions.items()}
 
         for _vdw in reversed(list(np.arange(vdw_min, vdw_max + 0.0001, 0.05))):
             logger.info("Trying VDW %.3f" % _vdw)

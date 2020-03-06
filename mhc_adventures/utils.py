@@ -60,11 +60,19 @@ def check_atom_record(line):
 
 
 def change_atom_record(line, **kwargs):
-    for key, val in kwargs.iteritems():
+    for key, val in kwargs.items():
         if key == 'atomn':
             val = '%-3s' % val
         line = line[:pdb_slices[key].start] + (pdb_formats[key] % val) + line[pdb_slices[key].stop:]
     return line
+
+
+def load_gdomains_mhc(pdb_id):
+    return prody.parsePDB(define.GDOMAINS_DIR /pdb_id + '_mhc_ah.pdb')
+
+
+def load_gdomains_peptide(pdb_id):
+    return prody.parsePDB(define.GDOMAINS_DIR / pdb_id + '_pep_ah.pdb')
 
 
 def get_atom_fields(line, *args, **kwargs):
@@ -94,9 +102,9 @@ def global_align(s1, s2):
 
 def __get_square_aln_matrix():
     blosum62 = matlist.blosum62
-    alphabet = list(set(zip(*blosum62.keys())[0]))
+    alphabet = list(set(list(zip(*blosum62.keys()))[0]))
     matrix_square = {}
-    for key, val in blosum62.iteritems():
+    for key, val in blosum62.items():
         matrix_square[key] = val
         matrix_square[(key[1],key[0])] = val
 
@@ -746,7 +754,7 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None, exclude_hydrogen
     n = 0
     rmsd = 0.0
     nanar = np.array([np.nan]*3)
-    for key, crd1 in crds1.iteritems():
+    for key, crd1 in crds1.items():
         if backbone:
             if key[1] not in names:
                 continue

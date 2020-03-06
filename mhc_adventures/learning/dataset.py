@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from .wrappers import *
-from . import grids
+from ..wrappers import *
+from .. import grids
 
 
 def scale_func_sigmoid(break_point=1.2, steepness=3.):

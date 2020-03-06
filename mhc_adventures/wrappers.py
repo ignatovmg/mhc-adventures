@@ -1,7 +1,33 @@
 import subprocess
 import os
 import logging
-import shutil
+import contextlib
+import tempfile
+from path import Path
+
+
+@contextlib.contextmanager
+def isolated_filesystem(dir=None, remove=True):
+    """A context manager that creates a temporary folder and changes
+    the current working directory to it for isolated filesystem tests.
+    """
+    cwd = os.getcwd()
+    if dir is None:
+        t = tempfile.mkdtemp(prefix='pocketdock-')
+    else:
+        t = dir
+    os.chdir(t)
+    try:
+        yield t
+    except Exception as e:
+        logging.error('Error occured, temporary files are in ' + t)
+        raise
+    else:
+        os.chdir(cwd)
+        if remove:
+            Path(t).rmtree_p()
+    finally:
+        os.chdir(cwd)
 
 
 def file_is_empty(path):
@@ -56,7 +82,4 @@ def tmp_file_name(ext=''):
 
 
 def rmdir(dirname):
-    try:
-        shutil.rmtree(dirname)
-    except:
-        pass
+    Path(dirname).rmtree_p()

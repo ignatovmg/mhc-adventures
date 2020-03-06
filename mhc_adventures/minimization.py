@@ -189,7 +189,7 @@ def minimize_energy(pdb,
                     psf=None,
                     clean=False):
 
-    for k, v in locals().iteritems():
+    for k, v in locals().items():
         logging.info("{:10s} = {}".format(str(k), str(v)))
 
     pdb = Path(pdb)
@@ -242,7 +242,7 @@ def minimize_energy_single_files(pdb, out=None,
                                  prepare_kwargs={},
                                  clean=False):
 
-    for k, v in locals().iteritems():
+    for k, v in locals().items():
         logging.info("{:10s} = {}".format(str(k), str(v)))
 
     pdb = Path(pdb)
@@ -329,7 +329,7 @@ def minimize_energy_single_files_generic(pdb, out=None,
                                          nsteps=1000,
                                          fix_selection='',
                                          prepare_kwargs={}):
-    for k, v in locals().iteritems():
+    for k, v in locals().items():
         logging.info("{:10s} = {}".format(str(k), str(v)))
 
     pdb = Path(pdb)
