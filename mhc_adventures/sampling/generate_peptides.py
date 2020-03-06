@@ -4,16 +4,20 @@ import subprocess
 from subprocess import Popen
 from time import time
 import itertools
+from tqdm import tqdm
+import sys
 
 import prody
 from path import Path
 from Bio.SeqUtils import seq1, seq3
 from Bio.Alphabet.IUPAC import IUPACProtein
 
-from . import define, wrappers
-from .mhc_peptide import BasePDB
+from .. import define, wrappers
+from ..mhc_peptide import BasePDB
+from ..define import logger
 
-logger = define.logger
+
+_TEMPLATES_DIR = PACKAGE_ROOT = Path(__file__).abspath().dirname() / 'ptemplates'
 
 
 _assemble_production = '''Chain: two loops
@@ -183,7 +187,7 @@ class PeptideSampler(object):
         bbnames = ['C', 'O', 'CA', 'N', 'OXT']
         lgt = len(self.pep_seq)
         if self.custom_template is None:
-            tpl = Path(define.PEPTIDE_TEMPLATES_DIR) / str(lgt) + 'mer.pdb'
+            tpl = _TEMPLATES_DIR / str(lgt) + 'mer.pdb'
         else:
             tpl = self.custom_template
         tpl = prody.parsePDB(tpl)
@@ -238,7 +242,7 @@ class PeptideSampler(object):
         self._generate_sidechains_scwrl()
         return self.pep
 
-    def _run_brikard(self, N, resin, resic, nrot=1, vdw=0.3, seed=123, rec_resi_list=None, restrictions=None):
+    def _run_brikard(self, N, resin, resic, nrot=1, vdw=0.3, seed=123, rec_resi_list=None, restrictions=None, show_progress_bar=True):
         # pivots = (resin + 1, (resin + resic) / 2, resic - 1)
         outdir = self.wdir
         oldpwd = Path.getcwd()
@@ -282,40 +286,52 @@ class PeptideSampler(object):
 
             # run brikard
             wrappers.shell_call([define.ASSEMBLE_EXE, a_file])
-            process = Popen(define.BRIKARD_EXE, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            process.communicate(str(seed).encode('utf-8'))
+            with Popen(define.BRIKARD_EXE, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
+                try:
+                    process.communicate(str(seed).encode('utf-8'), timeout=1)
+                except subprocess.TimeoutExpired:
+                    pass
+                progress_bar = tqdm(total=N) if show_progress_bar else None
 
-            noutputs = 0
-            output = ''
-            start_time = time()
-            while output or (process.poll() is None):
-                output = process.stdout.readline().decode('utf-8')
-                if output:
-                    logger.info(output.strip())
-                    if 'accepted =' in output:
-                        naccepted = int(output.split('accepted = ')[-1])
-                        noutputs += 1
-                        progress = naccepted / float(noutputs)
+                last_naccepted = 0
+                noutputs = 0
+                output = ''
+                start_time = time()
+                while output or process.poll() is None:
+                    output = process.stdout.readline().decode('utf-8')
+                    if output:
+                        logger.debug(output.strip())
+                        if 'accepted =' in output:
+                            naccepted = int(output.split('accepted = ')[-1])
+                            noutputs += 1
+                            progress = naccepted / float(noutputs)
 
-                        # Kill if progress is too slow
-                        if noutputs > 50 and progress < 0.05:
-                            logger.info("Progress is too slow: %f. Killing ..." % progress)
+                            # tqdm update
+                            if progress_bar is not None:
+                                progress_bar.update(naccepted - last_naccepted)
+                            last_naccepted = naccepted
+
+                            # Kill if progress is too slow
+                            if noutputs > 50 and progress < 0.05:
+                                logger.warning("Progress is too slow: %f. Killing ..." % progress)
+                                process.kill()
+                            if naccepted > N:
+                                logger.info("Brikard has generated %i (more than requested).." % naccepted)
+                                # process.kill()
+
+                    # Kill if cannot initialize sampling in 5 mins
+                    if noutputs == 0:
+                        if time() - start_time > self._sampling_init_timeout:
+                            logger.warning('Couldn\'t find the first lead in 5 minutes, decrease VDW penalty')
                             process.kill()
-                        if naccepted > N:
-                            logger.info("Brikard has generated %i (more than requested).." % naccepted)
-                            # process.kill()
 
-                # Kill if cannot initialize sampling in 5 mins
-                if noutputs == 0:
-                    if time() - start_time > self._sampling_init_timeout:
-                        logger.info('Couldn\'t find the first lead in 5 minutes, decrease VDW penalty')
-                        process.kill()
-
-            process.wait()
+                if progress_bar is not None:
+                    progress_bar.update(N - last_naccepted)
+                    progress_bar.close()
 
             brikard_raw = glob('mol_*.pdb')
             if len(brikard_raw) == 0:
-                logger.warning('No sampled structures found (mol_000001*.pdb)')
+                logger.info('No sampled structures found (mol_000001*.pdb)')
                 oldpwd.chdir()
                 return
 
@@ -407,7 +423,7 @@ class PeptideSampler(object):
         self._disu_pairs = pairs
         return pairs
 
-    def generate_peptides(self, nsamples, nrotamers, vdw, seed, sample_resi_within=None, auto_disu=True, keep_rec=True):
+    def generate_peptides(self, nsamples, nrotamers, vdw, seed, sample_resi_within=None, auto_disu=True, keep_rec=True, show_progress_bar=True):
         vdw_min = self._vdw_min
         vdw_max = vdw
 
@@ -465,7 +481,8 @@ class PeptideSampler(object):
                               vdw=_vdw,
                               seed=seed,
                               rec_resi_list=sample_resi_list,
-                              restrictions=restrictions)
+                              restrictions=restrictions,
+                              show_progress_bar=show_progress_bar)
 
             if self.brikard is not None:
                 logger.info('Fixing names and chains in output structures')
@@ -481,9 +498,9 @@ class PeptideSampler(object):
                 BasePDB(ag=self.brikard).save(self._brikard_file)
 
             if self.brikard is None or self.brikard.numCoordsets() < nsamples:
-                logger.info("===== Current VDW of %.3f is too high" % _vdw)
+                logger.info("Current VDW of %.3f is too high, decreasing" % _vdw)
             else:
-                logger.info("===== Enough conformations was generated. Breaking the loop ..")
+                logger.info("Enough conformations was generated. Breaking the loop ..")
                 break
 
         return self.brikard.copy()

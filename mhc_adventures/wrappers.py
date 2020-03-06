@@ -15,7 +15,7 @@ def isolated_filesystem(dir=None, remove=True):
     """
     cwd = os.getcwd()
     if dir is None:
-        t = tempfile.mkdtemp(prefix='pocketdock-')
+        t = tempfile.mkdtemp(prefix='mhc-')
     else:
         t = dir
     os.chdir(t)
@@ -30,6 +30,13 @@ def isolated_filesystem(dir=None, remove=True):
             Path(t).rmtree_p()
     finally:
         os.chdir(cwd)
+
+
+def isolate(fun):
+    def new_fun(*args, **kwargs):
+        with isolated_filesystem():
+            fun(*args, **kwargs)
+    return new_fun
 
 
 def write_json(path, data):
@@ -71,16 +78,13 @@ def shell_call(call, shell=False, *args, **kwargs):
         cmd_string = ' '.join(cmd_string)
 
     try:
-        logger.debug('Command executed: ' + cmd_string)
         output = subprocess.check_output(call, shell=shell, *args, **kwargs)
         output = output.decode('utf-8')
     except subprocess.CalledProcessError as e:
         logger.exception(e)
+        logger.debug('Command executed: ' + cmd_string)
         logger.debug(e.output)
         raise
-    
-    logger.debug('Command output: ')
-    logger.debug(output)
         
     return output
 

@@ -5,37 +5,15 @@ import json
 
 
 PACKAGE_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
-with open(PACKAGE_ROOT / '..' / 'vars.json', 'r' ) as f:
+with open(PACKAGE_ROOT / '..' / 'vars.json', 'r') as f:
     _VARS = json.load(f)
 
 # logging
-LOGGING_CONF = PACKAGE_ROOT.dirname() / 'logging.conf'
-logging.config.fileConfig(LOGGING_CONF)
-logger = logging.getLogger('debug')
-
-# directories
-SRC_DIR = PACKAGE_ROOT / 'source'
-BIN_DIR = PACKAGE_ROOT / 'executables'
-MOL_PRM_DIR = PACKAGE_ROOT / 'mol-prms'
-PDB_PREP_DIR = BIN_DIR / 'pdb_prep'
-GRID_PRM_DIR = PACKAGE_ROOT / 'grid-prms'
-TEST_DIR = PACKAGE_ROOT / 'data/test_data'
-PEPTIDE_TEMPLATES_DIR = PACKAGE_ROOT / 'ptemplates'
+logger = logging.getLogger('console')
 
 # parameters
-RTF22_FILE = MOL_PRM_DIR / 'top_all22_prot_changed_atom_names.rtf'
-PRM22_FILE = MOL_PRM_DIR / 'par_all22_prot.prm'
-ATOM_PROPERTY22_FILE = GRID_PRM_DIR / 'props_new.csv'
-ATOM_TYPES22_FILE = GRID_PRM_DIR / 'types_new.csv'
-ATOM_PROPERTY_DEFAULT = ATOM_PROPERTY22_FILE
-ATOM_TYPES_DEFAULT = ATOM_TYPES22_FILE
-
-# executables
-PDBPREP_EXE = PDB_PREP_DIR / 'pdbprep.pl'
-PDBNMD_EXE = PDB_PREP_DIR / 'pdbnmd.pl'
-PSFGEN_EXE = PDB_PREP_DIR / 'psfgen'
-NMIN_EXE = PDB_PREP_DIR / 'nmin'
-GRID_EXE = BIN_DIR / 'property_grid'
+RTF22_FILE = PACKAGE_ROOT / 'mol-prms' / 'top_all22_prot_changed_atom_names.rtf'
+PRM22_FILE = PACKAGE_ROOT / 'mol-prms' / 'par_all22_prot.prm'
 
 # misc
 GDOMAINS_DIR = Path(_VARS['GDOMAINS_DIR'])

@@ -30,4 +30,5 @@ dependencies:
   - pymol==2.3.*
   - matplotlib
   - seaborn
+  - pytest==3.0.*
 

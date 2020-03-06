@@ -8,11 +8,10 @@ from Bio.SeqUtils import seq3
 
 from pymol import cmd
 
-from . import utils
-from . import define
-from .wrappers import *
-
-import logging
+from .. import utils
+from .. import define
+from ..wrappers import *
+from ..define import logger
 
 
 class TemplateModeller:
@@ -59,19 +58,19 @@ class TemplateModeller:
         aln1 = aln[0]
         aln2 = aln[1]
         
-        logging.info('Alignment:')
-        logging.info('new sequence: ' + aln1)
-        logging.info('old sequence: ' + aln2)
-        logging.info('')
-        logging.info('new peptide: ' + pepseq)
-        logging.info('old peptide: ' + pepseq_orig)
+        logger.info('Alignment:')
+        logger.info('new sequence: ' + aln1)
+        logger.info('old sequence: ' + aln2)
+        logger.info('')
+        logger.info('new peptide: ' + pepseq)
+        logger.info('old peptide: ' + pepseq_orig)
         
         mhc_mutations = []
         for anew, aold, resi in zip(list(aln1), list(aln2), resi_list):
             if anew != aold:
                 if anew != '-' and anew != 'X' and aold != '-' and aold != 'X':
                     mhc_mutations.append((seq3(anew), seq3(aold), resi))
-        logging.info('Found %i mutations in MHC' % len(mhc_mutations))
+        logger.info('Found %i mutations in MHC' % len(mhc_mutations))
         
         pep_mutations = []
         pep_resi = map(str, range(len(pepseq_orig)))
@@ -80,7 +79,7 @@ class TemplateModeller:
                 if anew != '-' and anew != 'X' and aold != '-' and aold != 'X':
                     pep_mutations.append((anew, aold, resi))
 
-        logging.info('Found %i mutations in peptide' % len(pep_mutations))
+        logger.info('Found %i mutations in peptide' % len(pep_mutations))
         
         cmd.reinitialize()
         cmd.load(self._get_mhc_path(pdb), 'mhc')
@@ -92,13 +91,13 @@ class TemplateModeller:
         cmd.alter('all', "alt=''")
         
         for new, old, resi in mhc_mutations:
-            logging.info(resi, old, new)
+            logger.info(resi, old, new)
             cmd.get_wizard().do_select("A/" + resi + "/")
             cmd.get_wizard().set_mode(seq3(new).upper())
             cmd.get_wizard().apply()
             
         for new, old, resi in pep_mutations:
-            logging.info(resi, old, new)
+            logger.info(resi, old, new)
             cmd.get_wizard().do_select("B/" + resi + "/")
             cmd.get_wizard().set_mode(seq3(new).upper())
             cmd.get_wizard().apply()
@@ -121,12 +120,12 @@ class TemplateModeller:
         aln1 = aln[0]
         aln2 = aln[1]
         
-        logging.info('Alignment:')
-        logging.info('new sequence: ' + aln1)
-        logging.info('old sequence: ' + aln2)
-        logging.info('')
-        logging.info('new peptide: ' + pepseq)
-        logging.info('old peptide: ' + pepseq_orig)
+        logger.info('Alignment:')
+        logger.info('new sequence: ' + aln1)
+        logger.info('old sequence: ' + aln2)
+        logger.info('')
+        logger.info('new peptide: ' + pepseq)
+        logger.info('old peptide: ' + pepseq_orig)
         
         mhc_mutations = []
         n_mhc = 0
@@ -137,7 +136,7 @@ class TemplateModeller:
                 else:
                     mhc_mutations.append(anew)
                     n_mhc += 1
-        logging.info('Found %i mutations in MHC' % n_mhc)
+        logger.info('Found %i mutations in MHC' % n_mhc)
                     
         pep_mutations = []
         n_pep = 0
@@ -147,7 +146,7 @@ class TemplateModeller:
             else:
                 pep_mutations.append(anew)
                 n_pep += 1
-        logging.info('Found %i mutations in peptide' % n_pep)
+        logger.info('Found %i mutations in peptide' % n_pep)
 
         # merge peptide and mhc
         tmp_pdb_name = str(os.getpid()) + '_merged.pdb'
@@ -191,7 +190,7 @@ class TemplateModeller:
             raise RuntimeError('Output file must have ".pdb" extension')
         
         pdb = self.pick_template(mhcseq, pepseq)
-        logging.info('TEMPLATE: %s' % pdb)
+        logger.info('TEMPLATE: %s' % pdb)
         
         if scwrl:
             self.create_model_from_template_scwrl(savepath, mhcseq, pepseq, pdb, add_h, remove_tmp=True)

@@ -12,8 +12,7 @@ from . import define
 from . import utils
 from . import atom_naming
 from . import wrappers
-
-logger = define.logger
+from .define import logger
 
 _GDOMAINS_TABLE = pd.read_csv(define.TEMPLATE_MODELLER_DEFAULT_TABLE, index_col=0)
 

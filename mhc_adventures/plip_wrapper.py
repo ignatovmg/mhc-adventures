@@ -2,17 +2,8 @@ import os
 import pandas as pd
 import sys
 
-
-# In[3]:
-
-
 from .utils import merge_two
 from .wrappers import remove_files
-
-
-# In[4]:
-
-
 from . import define
 
 if define.PLIP_DIR not in sys.path:
