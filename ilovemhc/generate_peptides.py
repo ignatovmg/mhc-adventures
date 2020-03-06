@@ -449,8 +449,8 @@ class PeptideSampler(object):
         sample_resi_list = []
         if sample_resi_within is not None:
             logger.info('Finding residues on the receptor to sample')
-
             sel = '(same residue as exwithin %f of (resnum %i:%i)) and name CA' % (sample_resi_within, resin, resic)
+            print(self._input)
             sel = self._input.select(sel)
 
             # dont sample disulfide bonds
@@ -477,7 +477,7 @@ class PeptideSampler(object):
             # (nres - 2, 1): '-175 -30'  # [-175, -30.]
         }
         restrictions = {(residues[resi - 1], tor): v for (resi, tor), v in restrictions.iteritems()}
-
+        
         for _vdw in reversed(list(np.arange(vdw_min, vdw_max + 0.0001, 0.05))):
             logger.info("Trying VDW %.3f" % _vdw)
 

@@ -30,15 +30,16 @@ class BasePDB(object):
         self.energy_table = None
 
         if not pdb_file is None:
-            self.ag = prody.parsePDB(pdb_file, chain='B')
+            self.ag = prody.parsePDB(pdb_file)
+            print(self.ag)
             if read_energy:
                 self.energy_table = self.read_energy_from_pdb(pdb_file)
 
         elif not pdb_list is None:
-            ag_first = prody.parsePDB(pdb_list[0], chain='B')
+            ag_first = prody.parsePDB(pdb_list[0])
             new_csets = []
             for f in pdb_list:
-                ag = prody.parsePDB(f, chain='B')
+                ag = prody.parsePDB(f)
                 assert (list(ag.getNames()) == list(ag_first.getNames()))
                 new_csets.append(ag.getCoords())
             ag_first.setCoords(np.array(new_csets))
@@ -250,7 +251,7 @@ class BasePDB(object):
         csets = self._make_csets(csets)
 
         nmin, psf = self._prepare_pdb22_one_frame(out_prefix, **kwargs)
-        nmin_ag = prody.parsePDB(nmin, chain = 'B')
+        nmin_ag = prody.parsePDB(nmin)
 
         if len(csets) == 1:
             self.ag = nmin_ag
@@ -267,7 +268,7 @@ class BasePDB(object):
             new_csets = []
             for cset in csets:
                 nmin_frame, psf_frame = self.prepare_pdb22_one_frame(out_prefix + '-%i-tmp' % cset, cset=0, **kwargs)
-                ag_frame = prody.parsePDB(nmin_frame, chain = 'B')
+                ag_frame = prody.parsePDB(nmin_frame)
                 assert (list(nmin_ag.getNames()) == list(ag_frame.getNames()))
 
                 new_csets.append(ag_frame.getCoords())
@@ -419,6 +420,7 @@ class BasePDB(object):
         """
         m1 = self
         m2 = mol
+
         assert(m1.ag.numCoordsets() == m2.ag.numCoordsets())
 
         buf = StringIO()
@@ -429,7 +431,9 @@ class BasePDB(object):
             buf.write('ENDMDL\n')
 
         buf.seek(0)
+
         joint = prody.parsePDBStream(buf)
+
         buf.close()
 
         joint = BasePDB(ag=joint)
