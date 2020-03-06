@@ -6,7 +6,7 @@ import pytest
 from ..mhc_peptide import BasePDB
 from ..sampling.generate_peptides import PeptideSampler
 from .. import utils
-from ..wrappers import isolate
+from ..wrappers import isolate, isolated_filesystem
 
 
 @isolate
@@ -56,11 +56,12 @@ def test_instantiate_with_seq_and_custom_template():
     assert sampler.pep.numAtoms() > 10
 
 
-@isolate
-def test_generate_simple():
-    sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'))
-    sampler.generate_peptides(100, 1, 0.3, 123)
-    assert sampler.brikard.numCoordsets() == 100
+@pytest.mark.parametrize('nsamples', [1, 10, 100, 1000])
+def test_generate_simple(nsamples):
+    with isolated_filesystem():
+        sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'))
+        sampler.generate_peptides(nsamples, 1, 0.3, 123)
+        assert sampler.brikard.numCoordsets() == nsamples
 
 
 @isolate
