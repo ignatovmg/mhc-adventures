@@ -121,7 +121,7 @@ class BasePDB(object):
             status = p_finish.poll()
 
             if status != 0:
-                logging.error('Called process returned ' + str(status))
+                logger.error('Called process returned ' + str(status))
 
         self.ag = prody.parsePDBStream(StringIO(''.join(output)))
         self.renumber_residues()
@@ -199,7 +199,7 @@ class BasePDB(object):
         natoms = 0
         for r1, r2 in zip(pdb.iterResidues(), ref.iterResidues()):
             # same residue
-            logging.debug('%s - %s' % (r1, r2))
+            logger.debug('%s - %s' % (r1, r2))
             assert (r1.getResname() == r2.getResname())
             atoms1 = r1.getNames()
             atoms2 = r2.getNames()
@@ -240,7 +240,7 @@ class BasePDB(object):
             else:
                 nmin_ag.setCoords(self.ag.getCoordsets())
         else:
-            logging.info('Molecule was altered during preparation, preparing each frame separately')
+            logger.info('Molecule was altered during preparation, preparing each frame separately')
             new_csets = []
             for cset in csets:
                 nmin_frame, psf_frame = self._prepare_pdb22_one_frame(out_prefix + '-%i-tmp' % cset, cset=0, **kwargs)

@@ -104,6 +104,9 @@ class PeptideSampler(object):
     _sampling_init_timeout = 5 * 60
 
     def __init__(self, pep_seq=None, pep=None, rec=None, wdir='.', prepare=True, custom_template=None):
+        if not define.BRIKARD_EXE.exists():
+            raise OSError('Brikard executable is missing ({})'.format(define.BRIKARD_EXE))
+
         self.wdir = Path(wdir)
         self.wdir.mkdir_p()
         self.prepare = prepare

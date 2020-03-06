@@ -19,6 +19,11 @@ CHECK_VERSION=0.14.0
 # Check that we have cmake
 #which cmake || echo "Please install cmake >= 3.12" && exit 1
 
+# Create vars.json
+sed "s:#SRC_DIR#:${SRC_DIR}:g" vars.json.tpl > vars.json
+sed -i "s:#MIN_EXE#:${ENV_DIR}/bin/minimize:g" vars.json
+
+
 # load modules
 if [[ "$(hostname)" == login* ]]; then
     source "${SRC_DIR}/seawulf_modules.txt"

@@ -2,6 +2,7 @@ import subprocess
 import os
 import contextlib
 import tempfile
+import json
 from path import Path
 
 from .define import logger
@@ -29,6 +30,16 @@ def isolated_filesystem(dir=None, remove=True):
             Path(t).rmtree_p()
     finally:
         os.chdir(cwd)
+
+
+def write_json(path, data):
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=4)
+
+
+def read_json(path):
+    with open(path, 'r') as f:
+        return json.load(f)
 
 
 def file_is_empty(path):

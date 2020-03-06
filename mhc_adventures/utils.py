@@ -13,6 +13,7 @@ import prody
 
 from . import define
 from .wrappers import *
+from .define import logger
 
 nielsen_residue_set = [7, 9, 24, 45, 59, 62, 63, 66, 67, 69, 70, 73, 74, 76, 77, 80, 81, 84, 95, 97, 99, 114, 116, 118,
                        143, 147, 150, 152, 156, 158, 159, 163, 167, 171]
@@ -230,7 +231,7 @@ def pdb_to_slices(pdb):  # TODO: fails if MODEL is the last record
     if not mdl_lines:
         if end_lines:
             if len(end_lines) > 1:
-                logging.warning('Multiple models found, but no MODEL records')
+                logger.warning('Multiple models found, but no MODEL records')
                 start = 0
                 for end in end_lines:
                     slices.append(slice(start, end + 1))
@@ -238,13 +239,13 @@ def pdb_to_slices(pdb):  # TODO: fails if MODEL is the last record
             else:
                 slices.append(slice(0, end_lines[0] + 1))
         else:
-            logging.warning('Warning no END record found')
+            logger.warning('Warning no END record found')
             slices.append(slice(0, linei + 1))
     else:
         if len(mdl_lines) != len(end_lines):
-            logging.warning('Warning # of MODEL records != # of ENDMDL records')
+            logger.warning('Warning # of MODEL records != # of ENDMDL records')
             if len(end_lines) == 0:
-                logging.warning('Warning no ENDMDL records are present at all')
+                logger.warning('Warning no ENDMDL records are present at all')
 
         mi = 0
         ei = 0
@@ -260,7 +261,7 @@ def pdb_to_slices(pdb):  # TODO: fails if MODEL is the last record
 
             if mdl < end and mi < len(mdl_lines):
                 if last[1] == 'mdl':
-                    logging.warning('Warning no terminal END is found for MODEL record: line %i. Skipping model' % mdl)
+                    logger.warning('Warning no terminal END is found for MODEL record: line %i. Skipping model' % mdl)
 
                 last = (mdl, 'mdl')
                 mi += 1
@@ -268,7 +269,7 @@ def pdb_to_slices(pdb):  # TODO: fails if MODEL is the last record
                 if last[1] == 'mdl':
                     slices.append(slice(last[0], end + 1))
                 else:
-                    logging.error('Error no MODEL record found between 2 END records: (line %i - line %i). Skipping model' % (last[0], end))
+                    logger.error('Error no MODEL record found between 2 END records: (line %i - line %i). Skipping model' % (last[0], end))
                 last = (end, 'end')
                 ei += 1
 
@@ -326,7 +327,7 @@ def reduce_pdb(pdb, save=None, input_is_path=True, trim_first=True, remove_user_
     status = p_finish.poll()
     
     if status != 0:
-        logging.error('Called process returned ' + str(status))
+        logger.error('Called process returned ' + str(status))
         # raise RuntimeError('Called process returned ' + str(status))
         
     if remove_user_info:
@@ -587,7 +588,7 @@ def match_by_residue_position(pdb, ref, out=None, order_by=None):
     natoms = 0
     for r1, r2 in zip(pdb_rlist, ref_rlist):
         # same residue
-        logging.debug('%s - %s' % (r1, r2))
+        logger.debug('%s - %s' % (r1, r2))
         assert(r1.getResname() == r2.getResname())
         atoms1 = r1.getNames()
         atoms2 = r2.getNames()
@@ -765,14 +766,14 @@ def peptide_calc_bb_rsmd(pdb1, pdb2, backbone=True, chain=None, exclude_hydrogen
         try:
             crd2 = crds2[key]
         except KeyError as e:
-            logging.warning('Key Error (%s, %s): ' % (pdb1, pdb2) + str(e))
+            logger.warning('Key Error (%s, %s): ' % (pdb1, pdb2) + str(e))
             continue
 
         if not np.isnan(crd2).any():
             rmsd += ((crd1 - crd2)**2).sum()
             n += 1
     if n == 0:
-        logging.error('No atoms to compute RMSD for (n = 0)')
+        logger.error('No atoms to compute RMSD for (n = 0)')
         return np.nan
     rmsd = np.sqrt(rmsd / n)
     return rmsd
@@ -826,11 +827,11 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True, exclude_h
                 try:
                     coords = np.array(coords)
                 except ValueError as e:
-                    logging.exception(e)
+                    logger.exception(e)
                     continue
                     
                 if any(np.isnan(coords)):
-                    logging.warning('Invalid coordinates in %s' % id)
+                    logger.warning('Invalid coordinates in %s' % id)
                     continue
                 
                 label = get_atom_fields(line, 'atomn', 'resn', 'resi', strip=True)
@@ -845,9 +846,9 @@ def rmsd_ref_vs_models(ref, models, backbone=False, only_chain_b=True, exclude_h
                 rmsd += ((crd1 - crd2)**2).sum()
                 n += 1
             else:
-                logging.warning('Model %s Warning: atom %s is not in the reference molecule' % (mi, str(label)))
+                logger.warning('Model %s Warning: atom %s is not in the reference molecule' % (mi, str(label)))
         if n == 0:
-            logging.error('Model %s Error: n = 0' % mi)
+            logger.error('Model %s Error: n = 0' % mi)
             continue
         rmsd = np.sqrt(rmsd/n)
         result.append((mi, rmsd))
