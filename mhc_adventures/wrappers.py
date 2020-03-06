@@ -90,11 +90,12 @@ def shell_call(call, shell=False, *args, **kwargs):
 
 
 def remove_files(path_list):
-    shell_call(['rm', '-f'] + path_list)
+    [Path(x).remove_p() for x in path_list]
 
 
-def tmp_file_name(ext=''):
-    name = ('tmp-%i' % os.getpid()) + ext
+def tmp_file_name(suffix=None, prefix=None, dir=None):
+    h, name = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=dir)
+    os.close(h)
     return name
 
 

@@ -262,7 +262,7 @@ class PeptideSampler(object):
         try:
             wrappers.remove_files(glob('mol_000001*.pdb'))
 
-            assemble_file_content = _assemble_production.format(brikard_lib=define.BRIKARD_LIB,
+            assemble_file_content = _assemble_production.format(brikard_lib=define.BRIKARD_DIR / 'lib',
                                                                 output_dir='.',
                                                                 resin=resin,
                                                                 resic=resic,
@@ -285,7 +285,7 @@ class PeptideSampler(object):
             a_file.write_text(assemble_file_content)
 
             # run brikard
-            wrappers.shell_call([define.ASSEMBLE_EXE, a_file])
+            wrappers.shell_call([define.BRIKARD_DIR / 'bin' / 'assemble', a_file])
             with Popen(define.BRIKARD_EXE, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
                 try:
                     process.communicate(str(seed).encode('utf-8'), timeout=1)

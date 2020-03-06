@@ -23,10 +23,7 @@ ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele
 
 # brikard
 BRIKARD_DIR = Path(_VARS['BRIKARD_DIR'])
-BRIKARD_LIB = BRIKARD_DIR / 'lib'
 BRIKARD_EXE = BRIKARD_DIR / 'bin' / 'brikard'
-ASSEMBLE_EXE = BRIKARD_DIR / 'bin' / 'assemble'
-MISSING_LOOPS_EXE = BRIKARD_DIR / 'bin' / 'missing_loops'
 
 # rosetta
 ROSETTA_DIR = Path(_VARS['ROSETTA_DIR'])

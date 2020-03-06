@@ -9,8 +9,7 @@ from ..wrappers import isolate
 
 def test_renumber_residues():
     mhc = utils.load_gdomains_mhc('1ao7')
-    base = BasePDB(ag=mhc)
-    print(base.renumber_residues().ag)
+    BasePDB(ag=mhc).renumber_residues()
 
 
 #def test_add_hydrogens(self):
