@@ -12,7 +12,7 @@ from path import Path
 from Bio.SeqUtils import seq1, seq3
 from Bio.Alphabet.IUPAC import IUPACProtein
 
-from .. import define, wrappers
+from .. import define, helpers
 from ..mhc_peptide import BasePDB
 from ..define import logger
 
@@ -129,7 +129,7 @@ class PeptideSampler(object):
             self.rec = prody.parsePDB(rec)
         if isinstance(self.rec, prody.AtomGroup) and prepare:
                 logger.info('Preparing receptor')
-                self.rec = BasePDB(ag=self.rec).prepare_pdb22('mhc').hsd_to_his().ag
+                self.rec = BasePDB(ag=self.rec).prepare_pdb22('mhc')[0].hsd_to_his().ag
 
         self.pep = pep
         self.pep_seq = pep_seq
@@ -148,7 +148,7 @@ class PeptideSampler(object):
                 self.pep_seq = BasePDB(ag=self.pep).get_sequence()
                 if prepare:
                     logger.info('Preparing peptide')
-                    self.pep = BasePDB(ag=self.pep).prepare_pdb22('pep').hsd_to_his().ag
+                    self.pep = BasePDB(ag=self.pep).prepare_pdb22('pep')[0].hsd_to_his().ag
             else:
                 raise ValueError('Cannot load peptide')
 
@@ -226,12 +226,12 @@ class PeptideSampler(object):
         # scwrl wants rosetta hydrogen naming
         BasePDB(self._mrg_file).to_rosetta().save(self._mrg_file)
 
-        wrappers.shell_call(call)
+        helpers.shell_call(call)
 
         pep = prody.parsePDB(self._scw_file)
 
         # extract peptide and renumber
-        pep = BasePDB(ag=pep.select('chain B').copy()).renumber_residues(keep_resi=False).ag
+        pep = BasePDB(ag=pep.select('chain B').copy()).renumber(keep_resi=False).ag
         self.pep = pep
 
     def _make_pep_from_seq(self):
@@ -260,7 +260,7 @@ class PeptideSampler(object):
         sampled = '%s %i(1)' % (" ".join([str(x) for x in sampled]), resic)
 
         try:
-            wrappers.remove_files(glob('mol_000001*.pdb'))
+            helpers.remove_files(glob('mol_000001*.pdb'))
 
             assemble_file_content = _assemble_production.format(brikard_lib=define.BRIKARD_DIR / 'lib',
                                                                 output_dir='.',
@@ -285,7 +285,7 @@ class PeptideSampler(object):
             a_file.write_text(assemble_file_content)
 
             # run brikard
-            wrappers.shell_call([define.BRIKARD_DIR / 'bin' / 'assemble', a_file])
+            helpers.shell_call([define.BRIKARD_DIR / 'bin' / 'assemble', a_file])
             with Popen(define.BRIKARD_EXE, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
                 try:
                     process.communicate(str(seed).encode('utf-8'), timeout=1)
@@ -350,7 +350,7 @@ class PeptideSampler(object):
         """
         Convert pdb to mol2
         """
-        wrappers.shell_call(['obabel', '-ipdb', self._input_pdb_file, '-omol2', '-O', self._input_mol2_file])
+        helpers.shell_call(['obabel', '-ipdb', self._input_pdb_file, '-omol2', '-O', self._input_mol2_file])
 
     def _prepare_for_sampling(self):
         """
@@ -369,7 +369,7 @@ class PeptideSampler(object):
             merged.ag.setSerials(range(1, merged.ag.numAtoms() + 1))
             merged = merged.ag
         else:
-            merged = pep.renumber_residues(keep_resi=False).ag
+            merged = pep.renumber(keep_resi=False).ag
 
         prody.writePDB(self._input_pdb_file, merged)
         self._input = merged
@@ -445,15 +445,17 @@ class PeptideSampler(object):
 
                 sel = '(same residue as exwithin %f of (resnum %i:%i)) and name CA' % (sample_resi_within, resin, resic)
                 sel = self._input.select(sel)
+                if sel is None:
+                    logger.warning('No receptor residues selected for sampling, `sample_resi_within` is too small')
 
                 # dont sample disulfide bonds
-                if auto_disu:
+                if auto_disu and sel is not None:
                     disu_pairs = self._find_disu_bonds(self._input)
                     if disu_pairs:
                         resi_exclude = list(set(list(itertools.chain(*disu_pairs))))
                         sel = sel.select('not resnum ' + ' '.join(map(str, resi_exclude)))
 
-                if sel:
+                if sel is not None:
                     sample_resi_list = list(sel.getResnums())
 
         restrictions = {  # TODO: add restrictions
@@ -503,4 +505,4 @@ class PeptideSampler(object):
                 logger.info("Enough conformations was generated. Breaking the loop ..")
                 break
 
-        return self.brikard.copy()
+        return self.brikard

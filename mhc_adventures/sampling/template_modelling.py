@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from path import Path
 
 import Bio
 from Bio.SubsMat import MatrixInfo as matlist
@@ -10,8 +11,9 @@ from pymol import cmd
 
 from .. import utils
 from .. import define
-from ..wrappers import *
 from ..define import logger
+from ..helpers import file_absent_error, tmp_file_name, shell_call, remove_files
+from ..mhc_peptide import BasePDB
 
 
 class TemplateModeller:
@@ -30,10 +32,10 @@ class TemplateModeller:
         self.scwrl_bin = scwrl_bin
 
     def _get_mhc_path(self, pdb):
-        return self.pdb_path + '/' + pdb + '_mhc_ah.pdb'
+        return utils.gdomains_mhc_file(pdb)
     
     def _get_pep_path(self, pdb):
-        return self.pdb_path + '/' + pdb + '_pep_ah.pdb'
+        return utils.gdomains_peptide_file(pdb)
         
     # the choice of coefficient in scoring for template picking was
     # studied and 0.2 came out the best
@@ -46,8 +48,13 @@ class TemplateModeller:
         pdbid = table.pdb.iloc[np.argmin(mhc_dist * (1. - coef) + pep_dist * coef)]
         
         return pdbid
-        
-    def create_model_from_template_pymol(self, savepath, mhcseq, pepseq, pdb, add_polar_h=False):
+
+    def _create_model_from_template_pymol(self, savepath, mhcseq, pepseq, pdb, add_polar_h=False):
+        """
+        This doesn't work properly
+        """
+        raise NotImplementedError()
+
         table = self.pdb_table
         row = table[table.pdb == pdb].iloc[0, :]
         resi_list = row['resi_orig'].split(',')
@@ -73,7 +80,7 @@ class TemplateModeller:
         logger.info('Found %i mutations in MHC' % len(mhc_mutations))
         
         pep_mutations = []
-        pep_resi = map(str, range(len(pepseq_orig)))
+        pep_resi = map(str, range(1, len(pepseq_orig) + 1))
         for anew, aold, resi in zip(list(pepseq), list(pepseq_orig), pep_resi):
             if anew != aold:
                 if anew != '-' and anew != 'X' and aold != '-' and aold != 'X':
@@ -81,7 +88,7 @@ class TemplateModeller:
 
         logger.info('Found %i mutations in peptide' % len(pep_mutations))
         
-        cmd.reinitialize()
+        cmd.delete('all')
         cmd.load(self._get_mhc_path(pdb), 'mhc')
         cmd.load(self._get_pep_path(pdb), 'pep')
         
@@ -149,17 +156,17 @@ class TemplateModeller:
         logger.info('Found %i mutations in peptide' % n_pep)
 
         # merge peptide and mhc
-        tmp_pdb_name = str(os.getpid()) + '_merged.pdb'
-        utils.merge_two(tmp_pdb_name, self._get_mhc_path(pdb), self._get_pep_path(pdb))
+        tmp_pdb_name = tmp_file_name(suffix='_merged.pdb')
+        (BasePDB(self._get_mhc_path(pdb)) + BasePDB(self._get_pep_path(pdb))).save(tmp_pdb_name)
         
         # write down the new sequence
         scwrl_seq = ''.join(mhc_mutations + pep_mutations)
-        tmp_seq_name = str(os.getpid()) + '_seq.txt'
+        tmp_seq_name = tmp_file_name(suffix='_seq.txt')
         with open(tmp_seq_name, 'w') as f:
             f.write(scwrl_seq + '\n')
             
         # run scwrl
-        tmp_out_name = str(os.getpid()) + '_out.pdb'
+        tmp_out_name = tmp_file_name(suffix='_out.pdb')
         call = [self.scwrl_bin, '-s', tmp_seq_name, '-i', tmp_pdb_name, '-o', tmp_out_name]
         if not add_h:
             call += ['-h']
@@ -185,20 +192,22 @@ class TemplateModeller:
             
         return savepath
     
-    def create_model(self, savepath, mhcseq, pepseq, add_h=True, charmm22=True, scwrl=True):
-        if savepath[-4:] != '.pdb':
+    def create_model(self, savepath, mhcseq, pepseq, add_h=True, prepare=True):
+        scwrl = True
+        savepath = Path(savepath)
+
+        if savepath.splitext()[-1] != '.pdb':
             raise RuntimeError('Output file must have ".pdb" extension')
         
         pdb = self.pick_template(mhcseq, pepseq)
         logger.info('TEMPLATE: %s' % pdb)
-        
-        if scwrl:
-            self.create_model_from_template_scwrl(savepath, mhcseq, pepseq, pdb, add_h, remove_tmp=True)
-        else:
-            self.create_model_from_template_pymol(savepath, mhcseq, pepseq, pdb, add_h)
-        
-        outfiles = [pdb, savepath]
-        if charmm22:
-            outfiles += utils.prepare_pdb22(savepath, savepath[:-4])
-        
+
+        self.create_model_from_template_scwrl(savepath, mhcseq, pepseq, pdb, add_h, remove_tmp=True)
+        outfiles = [pdb, savepath, None]
+
+        if prepare:
+            psf = BasePDB(savepath).prepare_pdb22(savepath.stripext())[1]
+            outfiles = [pdb, savepath, psf]
+
+        # return (template_pdb, prepared pdb, prepared psf)
         return outfiles

@@ -2,11 +2,23 @@ import unittest
 import prody
 import numpy as np
 import pytest
+import itertools
+
 
 from ..mhc_peptide import BasePDB
 from ..sampling.generate_peptides import PeptideSampler
 from .. import utils
-from ..wrappers import isolate, isolated_filesystem
+from ..helpers import isolate, isolated_filesystem
+
+
+@pytest.fixture()
+def default_mhc():
+    return utils.load_gdomains_mhc('1ao7')
+
+
+@pytest.fixture()
+def default_pep():
+    return utils.load_gdomains_peptide('1ao7')
 
 
 @isolate
@@ -72,28 +84,41 @@ def test_generate_with_template():
     assert sampler.brikard.numCoordsets() == 10
 
 
-@isolate
-def test_generate_with_rec():
-    sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'), rec=utils.load_gdomains_mhc('1ao7'))
-    sampler.generate_peptides(10, 1, 0.2, 123)
+# TODO: Brikard fails on '3rwd' with the following error
+# Error termination. Backtrace:
+# ...
+# At line 479 of file manipulate_chain.f90
+# Fortran runtime error: Index '3031' of dimension 1 of array 'chain' above upper bound of 3030
+@pytest.mark.parametrize('pep,rec', itertools.product(['1a1m', '1t22', '2bvo'], ['1a1m', '1t22', '2bvo']))
+def test_generate_with_rec(pep, rec):
+    with isolated_filesystem():
+        sampler = PeptideSampler(pep=utils.load_gdomains_peptide(pep), rec=utils.load_gdomains_mhc(rec))
+        sampler.generate_peptides(10, 1, 0.2, 123)
+        assert sampler.brikard.numCoordsets() == 10
+
+
+# check that receptor is fixed by default during sampling
+def test_generate_receptor_fixed(default_mhc, default_pep):
+    with isolated_filesystem():
+        sampler = PeptideSampler(pep=default_pep, rec=default_mhc)
+        sampler.generate_peptides(10, 1, 0.2, 123)
+        assert sampler.brikard.numCoordsets() == 10
+        rec_fixed = sampler.brikard.select('chain A')
+        assert np.all(rec_fixed.getCoordsets(0) == rec_fixed.getCoordsets(1))
+
+
+# check that receptor is flexible with sample_resi_within parameter set
+def test_generate_receptor_flexible(default_mhc, default_pep):
+    with isolated_filesystem():
+        sampler = PeptideSampler(pep=default_pep, rec=default_mhc)
+        sampler.generate_peptides(10, 1, 0.2, 123, sample_resi_within=7)
+        assert sampler.brikard.numCoordsets() == 10
+        rec_flex = sampler.brikard.select('chain A')
+        assert np.any(rec_flex.getCoordsets(0) != rec_flex.getCoordsets(1))
+
+
+@pytest.mark.parametrize('radius', range(1, 7, 2))
+def test_generate_receptor_variable_radius(default_mhc, default_pep, radius):
+    sampler = PeptideSampler(pep=default_pep, rec=default_mhc)
+    sampler.generate_peptides(10, 1, 0.2, 123, sample_resi_within=radius)
     assert sampler.brikard.numCoordsets() == 10
-
-
-@isolate
-def test_receptor_sampling_fixed():
-    # check that receptor is fixed by default during sampling
-    sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'), rec=utils.load_gdomains_mhc('1ao7'))
-    sampler.generate_peptides(10, 1, 0.2, 123)
-    assert sampler.brikard.numCoordsets() == 10
-    rec_fixed = sampler.brikard.select('chain A')
-    assert np.all(rec_fixed.getCoordsets(0) == rec_fixed.getCoordsets(1))
-
-
-@isolate
-def test_receptor_sampling_flexible():
-    # check that receptor is flexible with sample_resi_within parameter set
-    sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'), rec=utils.load_gdomains_mhc('1ao7'))
-    sampler.generate_peptides(10, 1, 0.2, 123, sample_resi_within=7)
-    assert sampler.brikard.numCoordsets() == 10
-    rec_flex = sampler.brikard.select('chain A')
-    assert np.any(rec_flex.getCoordsets(0) != rec_flex.getCoordsets(1))
