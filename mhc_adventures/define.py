@@ -1,11 +1,12 @@
 import os
-import logging
+import logging.config
 from path import Path
 
 PACKAGE_ROOT = Path(os.path.dirname(os.path.abspath(__file__)))
 
 # logging
 LOGGING_CONF = PACKAGE_ROOT.dirname() / 'logging.conf'
+logging.config.fileConfig(LOGGING_CONF)
 logger = logging.getLogger('debug')
 
 # directories

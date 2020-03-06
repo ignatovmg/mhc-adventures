@@ -3,4 +3,3 @@ module load shared
 module load gcc-stack
 module load git
 module load anaconda/3
-#module load chimera

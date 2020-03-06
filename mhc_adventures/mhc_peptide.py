@@ -2,7 +2,6 @@ import pandas as pd
 import prody
 import re
 import numpy as np
-import logging
 
 from glob import glob
 from path import Path
@@ -50,6 +49,15 @@ class BasePDB(object):
     def __getattr__(self, name):
         return self.ag.__getattribute__(name)
 
+    def _make_csets(self, csets):
+        if csets is None:
+            return range(self.ag.numCoordsets())
+        if type(csets) == int:
+            return [csets]
+        if type(csets) == list:
+            return csets
+        raise TypeError('Wrong type of csets')
+
     def renumber_residues(self, keep_resi=True, keep_chains=True):
         self.ag.setSerials(range(1, self.ag.numAtoms() + 1))
 
@@ -69,19 +77,12 @@ class BasePDB(object):
         new = BasePDB(ag=self.ag.copy())
         return new
 
-    def _make_csets(self, csets):
-        if csets is None:
-            return range(self.ag.numCoordsets())
-        if type(csets) == int:
-            return [csets]
-        if type(csets) == list:
-            return csets
-        raise TypeError('Wrong type of csets')
-
     def get_sequence(self):
         return self.ag.getSequence()
 
     def add_hydrogens(self, trim=True, csets=None):
+        raise NotImplementedError()
+
         output = []
         natoms = -1
         csets = self._make_csets(csets)
@@ -188,67 +189,6 @@ class BasePDB(object):
             raise RuntimeError('Preparation failed')
 
         return out_prefix + '.pdb', out_prefix + '.psf'
-
-    def _prepare_pdb22_one_frame_old(self,
-                                out_prefix,
-                                cset=0,
-                                rtf=define.RTF22_FILE,
-                                prm=define.PRM22_FILE,
-                                change_his=True,
-                                remove_tmp=True,
-                                patch_termini=True):
-
-        pwd = Path.getcwd()
-
-        try:
-            pdb = Path(out_prefix + '_orig.pdb').abspath()
-            rtf = Path(rtf).abspath()
-            prm = Path(prm).abspath()
-
-            basename = Path(pdb.basename().lower())
-            dirname = pdb.dirname()
-            dirname.chdir()
-
-            if change_his:
-                self.his_to_hsd()
-            self.save(basename, csets=cset)
-
-            call = [define.PDBPREP_EXE, basename]
-            wrappers.shell_call(call)
-
-            call = [define.PDBNMD_EXE, basename,
-                    '--rtf=%s' % rtf,
-                    '--prm=%s' % prm,
-                    '--psfgen=' + define.PSFGEN_EXE,
-                    '--nmin=' + define.NMIN_EXE]
-            # if patch_chains:
-            #    call += ['--first', ','.join(['nter'] + [x.lower() for x in patch_chains])]
-            #    call += ['--last',  ','.join(['cter'] + [x.lower() for x in patch_chains])]
-            if patch_termini:
-                call += ['--default-patch']
-
-            call += ['?']
-            wrappers.shell_call(call)
-
-            nmin = Path(basename.stripext() + '_nmin.pdb')
-            psf = Path(basename.stripext() + '_nmin.psf')
-            wrappers.file_is_empty_error(nmin)
-
-            outnmin = pwd.joinpath(out_prefix + '_nmin.pdb')
-            outpsf = pwd.joinpath(out_prefix + '_nmin.psf')
-            nmin.move(outnmin)
-            psf.move(outpsf)
-
-            if remove_tmp:
-                files = basename.stripext() + '-*.????.pdb'
-                call = ['rm', '-f'] + glob(files) + [basename]
-                wrappers.shell_call(call)
-        except:
-            pwd.chdir()
-            raise
-
-        pwd.chdir()
-        return outnmin, outpsf
 
     @staticmethod
     def _match_by_residue_position(pdb, ref):

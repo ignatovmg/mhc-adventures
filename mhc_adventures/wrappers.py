@@ -1,9 +1,10 @@
 import subprocess
 import os
-import logging
 import contextlib
 import tempfile
 from path import Path
+
+from .define import logger
 
 
 @contextlib.contextmanager
@@ -20,7 +21,7 @@ def isolated_filesystem(dir=None, remove=True):
     try:
         yield t
     except Exception as e:
-        logging.error('Error occured, temporary files are in ' + t)
+        logger.error('Error occured, temporary files are in ' + t)
         raise
     else:
         os.chdir(cwd)
@@ -59,15 +60,16 @@ def shell_call(call, shell=False, *args, **kwargs):
         cmd_string = ' '.join(cmd_string)
 
     try:
-        logging.debug('Command executed: ' + cmd_string)
+        logger.debug('Command executed: ' + cmd_string)
         output = subprocess.check_output(call, shell=shell, *args, **kwargs)
+        output = output.decode('utf-8')
     except subprocess.CalledProcessError as e:
-        logging.exception(e)
-        logging.debug(e.output)
+        logger.exception(e)
+        logger.debug(e.output)
         raise
     
-    logging.debug('Command output: ')
-    logging.debug(output)
+    logger.debug('Command output: ')
+    logger.debug(output)
         
     return output
 

@@ -1,13 +1,9 @@
-# requires:
-# - BioPython
-# - brikard
-# - chimera (module load chimera)
-
 from glob import glob
 import numpy as np
 import subprocess
 from subprocess import Popen
 from time import time
+import itertools
 
 import prody
 from path import Path
@@ -19,10 +15,6 @@ from .mhc_peptide import BasePDB
 
 logger = define.logger
 
-_chimera_script = '''open {0}
-write format {1} atomTypes sybyl 0 {2}
-close all
-'''
 
 _assemble_production = '''Chain: two loops
 # problem description
@@ -121,7 +113,6 @@ class PeptideSampler(object):
         self._mrg_file = self.wdir/'merged.pdb'
         self._input_mol2_file = self.wdir/'mol.mol2'
         self._input_pdb_file = self.wdir/'input.pdb'
-        self._chim_file = self.wdir/'chimera.cmd'
         self._brikard_file = self.wdir/'brikard.pdb'
         self._a_file = self.wdir/'a.mhc'
 
@@ -170,7 +161,6 @@ class PeptideSampler(object):
         self._mrg_file.remove_p()
         self._input_mol2_file.remove_p()
         self._input_pdb_file.remove_p()
-        self._chim_file.remove_p()
         self.wdir.joinpath('test.pdb').remove_p()
         self.wdir.joinpath('test0.pdb').remove_p()
         self.wdir.joinpath('test1.pdb').remove_p()
@@ -251,6 +241,9 @@ class PeptideSampler(object):
         oldpwd = Path.getcwd()
         outdir.chdir()
 
+        self.brikard_raw_file = None
+        self.brikard = None
+
         residues = range(resin, resic + 1)
         pivots = tuple(residues[3:6])
 
@@ -286,14 +279,14 @@ class PeptideSampler(object):
 
             # run brikard
             wrappers.shell_call([define.ASSEMBLE_EXE, a_file])
-            echo = subprocess.Popen(('echo', str(seed)), stdout=subprocess.PIPE)
-            process = Popen(define.BRIKARD_EXE, stdin=echo.stdout, stdout=subprocess.PIPE)
+            process = Popen(define.BRIKARD_EXE, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            process.communicate(str(seed).encode('utf-8'))
 
             noutputs = 0
             output = ''
             start_time = time()
             while output or (process.poll() is None):
-                output = process.stdout.readline()
+                output = process.stdout.readline().decode('utf-8')
                 if output:
                     logger.info(output.strip())
                     if 'accepted =' in output:
@@ -315,7 +308,9 @@ class PeptideSampler(object):
                         logger.info('Couldn\'t find the first lead in 5 minutes, decrease VDW penalty')
                         process.kill()
 
-            brikard_raw = glob('mol_000001*.pdb')
+            process.wait()
+
+            brikard_raw = glob('mol_*.pdb')
             if len(brikard_raw) == 0:
                 logger.warning('No sampled structures found (mol_000001*.pdb)')
                 oldpwd.chdir()
@@ -332,14 +327,11 @@ class PeptideSampler(object):
 
         oldpwd.chdir()
 
-    def _chimera_convert(self):
+    def _pdb_to_mol2(self):
         """
         Convert pdb to mol2
         """
-        cmd = self._chim_file
-        with open(cmd, 'w') as f:
-            f.write(_chimera_script.format(self._input_pdb_file.basename(), 'mol2', self._input_mol2_file.basename()))
-        wrappers.shell_call(['chimera', '--nogui', cmd])
+        wrappers.shell_call(['obabel', '-ipdb', self._input_pdb_file, '-omol2', '-O', self._input_mol2_file])
 
     def _prepare_for_sampling(self):
         """
@@ -362,7 +354,7 @@ class PeptideSampler(object):
 
         prody.writePDB(self._input_pdb_file, merged)
         self._input = merged
-        self._chimera_convert()
+        self._pdb_to_mol2()
 
     @staticmethod
     def _scwrl_convert_atom_name(x):
@@ -384,7 +376,7 @@ class PeptideSampler(object):
         Receptor chain becomes A (if present), peptide - B, residues and atoms
         are renumbered correspondingly
         """
-        self.brikard.setNames(map(self._scwrl_convert_atom_name, self.brikard.getNames()))
+        self.brikard.setNames(list(map(self._scwrl_convert_atom_name, self.brikard.getNames())))
         residues = list(self.brikard.iterResidues())
         for i, r in enumerate(residues[:-self.pep_len], 1):
             r.setResnum(i)
@@ -392,7 +384,7 @@ class PeptideSampler(object):
         for i, r in enumerate(residues[-self.pep_len:], 1):
             r.setResnum(i)
             r.setChids('B')
-        self.brikard.setSerials(range(1, self.brikard.numAtoms() + 1))
+        self.brikard.setSerials(list(range(1, self.brikard.numAtoms() + 1)))
 
     def _find_disu_bonds(self, ag):
         """
@@ -420,27 +412,30 @@ class PeptideSampler(object):
         self._prepare_for_sampling()
 
         # identify peptide residue ids in the merged structure
-        residues = map(int, self._input.select('name CA').getResnums()[-self.pep_len:])
-        resin = residues[0]  # N-terminus
+        residues = list(map(int, self._input.select('name CA').getResnums()[-self.pep_len:]))
+        resin = residues[0]   # N-terminus
         resic = residues[-1]  # C-terminus
 
         # find which receptor residues to sample
         sample_resi_list = []
         if sample_resi_within is not None:
-            logger.info('Finding residues on the receptor to sample')
+            if self.rec is None:
+                logger.warning('`sample_resi_within` is set, but receptor is missing')
+            else:
+                logger.info('Finding residues on the receptor to sample')
 
-            sel = '(same residue as exwithin %f of (resnum %i:%i)) and name CA' % (sample_resi_within, resin, resic)
-            sel = self._input.select(sel)
+                sel = '(same residue as exwithin %f of (resnum %i:%i)) and name CA' % (sample_resi_within, resin, resic)
+                sel = self._input.select(sel)
 
-            # dont sample disulfide bonds
-            if auto_disu:
-                disu_pairs = self._find_disu_bonds(self._input)
-                if disu_pairs:
-                    resi_exclude = list(set(reduce(lambda x, y: list(x) + list(y), disu_pairs)))
-                    sel = sel.select('not resnum ' + ' '.join(map(str, resi_exclude)))
+                # dont sample disulfide bonds
+                if auto_disu:
+                    disu_pairs = self._find_disu_bonds(self._input)
+                    if disu_pairs:
+                        resi_exclude = list(set(list(itertools.chain(*disu_pairs))))
+                        sel = sel.select('not resnum ' + ' '.join(map(str, resi_exclude)))
 
-            if sel:
-                sample_resi_list = list(sel.getResnums())
+                if sel:
+                    sample_resi_list = list(sel.getResnums())
 
         restrictions = {  # TODO: add restrictions
             # (1, 2): '(-180 -150 75 180 0.2)',  # [-180., -160., 75., 180.],
@@ -487,3 +482,5 @@ class PeptideSampler(object):
             else:
                 logger.info("===== Enough conformations was generated. Breaking the loop ..")
                 break
+
+        return self.brikard.copy()
