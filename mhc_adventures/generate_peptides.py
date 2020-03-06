@@ -253,7 +253,7 @@ class PeptideSampler(object):
         sampled = set(range(resin + 1, resic))
         sampled = sorted(list(sampled - set(pivots)))
         pivots = '{0}(N) {0}(CA) {1}(N) {1}(CA) {2}(N) {2}(CA)'.format(*pivots)
-        sampled = '%s %i(1)' % (" ".join([str(x) for x in sampled]), resic)
+        sampled = '%i(2) %s %i(1)' % (resin, " ".join([str(x) for x in sampled]), resic)
 
         try:
             wrappers.remove_files(glob('mol_000001*.pdb'))
@@ -486,4 +486,4 @@ class PeptideSampler(object):
                 logger.info("===== Enough conformations was generated. Breaking the loop ..")
                 break
 
-        return self.brikard.copy()
+        return self.brikard
