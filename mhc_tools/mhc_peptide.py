@@ -16,8 +16,6 @@ from .define import logger
 
 _GDOMAINS_TABLE = pd.read_csv(define.TEMPLATE_MODELLER_DEFAULT_TABLE, index_col=0)
 
-_ALLELE_TABLE = pd.read_csv(define.ALLELE_SEQUENCES_CSV, sep=' ', index_col=1)
-
 _GDOMAINS_DIR = define.GDOMAINS_DIR
 
 
@@ -418,6 +416,8 @@ class BasePDB(object):
 
 
 class MHCIAllele(object):
+    _ALLELE_TABLE = pd.read_csv(define.ALLELE_SEQUENCES_CSV, sep=' ', index_col=1)
+
     def __init__(self, allele):
         self.name = allele
 
