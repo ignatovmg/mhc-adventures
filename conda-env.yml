@@ -7,6 +7,7 @@ channels:
   - eumetsat
   - schrodinger
   - pytorch
+  - insilichem
 dependencies:
   - python==3.7.*
   - pytorch==1.4.0
@@ -14,7 +15,7 @@ dependencies:
   - cudatoolkit==10.1.*
   - click==7.0.*
   - numpy==1.15.*
-  - openbabel==2.4.*
+  - openbabel==3.0.*
   - pandas==0.24.*
   - scipy==1.4.*
   - path.py==11.5.*
@@ -25,10 +26,9 @@ dependencies:
   - networkx==2.4.*
   - tqdm==4.38.*
   - scikit-learn==0.21.*
-  - jupyter==1.0.* # this should not be necessary in the future
+  - jupyter==1.0.*
   - biopython==1.74.*
   - pymol==2.3.*
   - matplotlib
   - seaborn
   - pytest==5.2.*
-

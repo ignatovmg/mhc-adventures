@@ -346,11 +346,36 @@ class PeptideSampler(object):
 
         oldpwd.chdir()
 
-    def _pdb_to_mol2(self):
+    def _pdb_to_mol2_not_used(self):
         """
         Convert pdb to mol2
         """
         helpers.shell_call(['obabel', '-ipdb', self._input_pdb_file, '-omol2', '-O', self._input_mol2_file])
+
+    def _pdb_to_mol2(self):
+        """
+        Have to use Chimera, because neither obabel nor rdkit are able to produce a correct mol2 file.
+        PS. Obabel sometimes messes the connectivity
+        """
+        if not define.CHIMERA_EXE.exists():
+            raise RuntimeError('Install Chimera and enter its binary location into vars.json')
+
+        chimera_script = '''open {}
+        write format mol2 atomTypes sybyl 0 {}
+        close all
+        '''
+        chimera_script = chimera_script.format(self._input_pdb_file, self._input_mol2_file)
+        with subprocess.Popen([define.CHIMERA_EXE, '--nogui'],
+                              stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE) as p:
+            stdout, stderr = p.communicate(chimera_script.encode('utf-8'))
+            logger.debug(stdout.decode('utf-8'))
+            if stderr != b'':
+                logger.error(stderr.decode('utf-8'))
+
+        if not self._input_mol2_file.exists():
+            raise OSError(f'{self._input_mol2_file} was not created')
 
     def _prepare_for_sampling(self):
         """
@@ -423,8 +448,9 @@ class PeptideSampler(object):
         self._disu_pairs = pairs
         return pairs
 
-    def generate_peptides(self, nsamples, nrotamers, vdw, seed, sample_resi_within=None, auto_disu=True, keep_rec=True, show_progress_bar=True):
-        vdw_min = self._vdw_min
+    def generate_peptides(self, nsamples, nrotamers, vdw, seed, vdw_min=_vdw_min,
+                          sample_resi_within=None, auto_disu=True,
+                          keep_rec=True, show_progress_bar=True):
         vdw_max = vdw
 
         logger.info('Preparing structure for sampling')

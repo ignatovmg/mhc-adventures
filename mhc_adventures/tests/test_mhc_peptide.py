@@ -20,28 +20,22 @@ def default_pep():
 
 @pytest.fixture()
 def renum_mhc():
-    return BasePDB(ag=utils.load_gdomains_mhc('1ao7')).renumber(keep_resi=False).ag
+    return BasePDB(utils.load_gdomains_mhc('1ao7')).renumber(keep_resi=False).ag
 
 
 @pytest.fixture()
 def renum_pep():
-    return BasePDB(ag=utils.load_gdomains_peptide('1ao7')).renumber(keep_resi=False).ag
+    return BasePDB(utils.load_gdomains_peptide('1ao7')).renumber(keep_resi=False).ag
 
 
 def test_renumber_residues():
     mhc = utils.load_gdomains_mhc('1ao7')
-    BasePDB(ag=mhc).renumber()
-
-
-#def test_add_hydrogens(self):
-#    mhc = utils.load_gdomains_mhc('1ao7')
-#    base = BasePDB(ag=mhc)
-#    base.add_hydrogens()
+    BasePDB(mhc).renumber()
 
 
 def test_his_to_hsd():
     mhc = utils.load_gdomains_mhc('1ao7')
-    base = BasePDB(ag=mhc)
+    base = BasePDB(mhc)
     base.his_to_hsd()
 
 

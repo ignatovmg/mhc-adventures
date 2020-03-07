@@ -13,23 +13,24 @@ def isolated_filesystem(dir=None, remove=True):
     """A context manager that creates a temporary folder and changes
     the current working directory to it for isolated filesystem tests.
     """
-    cwd = os.getcwd()
+    cwd = Path.getcwd()
     if dir is None:
-        t = tempfile.mkdtemp(prefix='mhc-')
+        t = Path(tempfile.mkdtemp(prefix='mhc-'))
     else:
-        t = dir
-    os.chdir(t)
+        t = Path(dir).abspath()
+        t.mkdir_p()
+    t.chdir()
     try:
         yield t
     except Exception as e:
         logger.error('Error occured, temporary files are in ' + t)
         raise
     else:
-        os.chdir(cwd)
+        cwd.chdir()
         if remove:
             Path(t).rmtree_p()
     finally:
-        os.chdir(cwd)
+        cwd.chdir()
 
 
 def isolate(fun):
@@ -82,8 +83,8 @@ def shell_call(call, shell=False, *args, **kwargs):
         output = output.decode('utf-8')
     except subprocess.CalledProcessError as e:
         logger.exception(e)
-        logger.debug('Command executed: ' + cmd_string)
-        logger.debug(e.output)
+        logger.error('Command executed: ' + cmd_string)
+        logger.error(e.output)
         raise
         
     return output

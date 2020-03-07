@@ -2,6 +2,9 @@ from prody import LOGGER
 import logging.config
 
 
+__all__ = ['sampling.generate_peptides.PeptideSampler']
+
+
 LOGGER.verbosity = 'ERROR'
 
 LOGGING = {

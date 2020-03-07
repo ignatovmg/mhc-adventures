@@ -3,6 +3,7 @@ import prody
 import numpy as np
 import pytest
 import itertools
+from path import Path
 
 
 from ..mhc_peptide import BasePDB
@@ -84,11 +85,6 @@ def test_generate_with_template():
     assert sampler.brikard.numCoordsets() == 10
 
 
-# TODO: Brikard fails on '3rwd' with the following error
-# Error termination. Backtrace:
-# ...
-# At line 479 of file manipulate_chain.f90
-# Fortran runtime error: Index '3031' of dimension 1 of array 'chain' above upper bound of 3030
 @pytest.mark.parametrize('pep,rec', itertools.product(['1a1m', '1t22', '2bvo'], ['1a1m', '1t22', '2bvo']))
 def test_generate_with_rec(pep, rec):
     with isolated_filesystem():

@@ -25,6 +25,9 @@ ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele
 BRIKARD_DIR = Path(_VARS['BRIKARD_DIR'])
 BRIKARD_EXE = BRIKARD_DIR / 'bin' / 'brikard'
 
+# chimera
+CHIMERA_EXE = Path(_VARS['CHIMERA'])
+
 # rosetta
 ROSETTA_DIR = Path(_VARS['ROSETTA_DIR'])
 ROSETTA_DB = ROSETTA_DIR / 'main' / 'database'
