@@ -115,6 +115,7 @@ def test_generate_receptor_flexible(default_mhc, default_pep):
 
 @pytest.mark.parametrize('radius', range(1, 7, 2))
 def test_generate_receptor_variable_radius(default_mhc, default_pep, radius):
-    sampler = PeptideSampler(pep=default_pep, rec=default_mhc)
-    sampler.generate_peptides(10, 1, 0.2, 123, sample_resi_within=radius)
-    assert sampler.brikard.numCoordsets() == 10
+    with isolated_filesystem():
+        sampler = PeptideSampler(pep=default_pep, rec=default_mhc)
+        sampler.generate_peptides(10, 1, 0.2, 123, sample_resi_within=radius)
+        assert sampler.brikard.numCoordsets() == 10
