@@ -3,10 +3,11 @@ Some tools for working with MHC structures
 
  How to
 ---
-1. Install [Chimera](https://www.cgl.ucsf.edu/chimera/download.html) and Brikard and specify their location in vars.json.tpl
+1. Install [Chimera](https://www.cgl.ucsf.edu/chimera/download.html) and Brikard 
+and specify their location in `vars.json.tpl`
 2. Run `./bootstrap.sh`
 3. `source activate.sh`
-4. `pytest -v -s`
+4. `pytest -v`
 
 So far usable and covered with tests are:
  * `from mhc_adventures.sampling.generate_peptides import PeptideSampler`

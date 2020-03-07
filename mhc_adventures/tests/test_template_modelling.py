@@ -50,7 +50,7 @@ def test_modeller_create_scwrl_add_h(default_mhc):
         mhc_seq = default_mhc.calpha.getSequence()
         modeller.create_model('model.pdb', mhc_seq, 'ACCCCCRTYKI', add_h=True, prepare=False)
 
-        # if HSE is not converted to HIS, prody converts it into S when fetching hte sequence
+        # if HSE is not converted to HIS, prody converts it into S when fetching the sequence
         ag = prody.parsePDB('model.pdb')
         assert ag.select('chain B and name CA').getSequence() == 'ACCCCCRTYKI'
         assert ag.select('chain A and name CA').getSequence() == mhc_seq

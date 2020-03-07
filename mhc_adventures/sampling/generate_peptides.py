@@ -20,7 +20,7 @@ from ..define import logger
 _TEMPLATES_DIR = PACKAGE_ROOT = Path(__file__).abspath().dirname() / 'ptemplates'
 
 
-_assemble_production = '''Chain: two loops
+_ASSEMBLE_PRODUCTION = '''Chain: two loops
 # problem description
 {brikard_lib}
 # path to library (relative or absolute)
@@ -98,7 +98,13 @@ class PeptideSampler(object):
     backbone conformation, with 0.3 vdw threshold and random seed 123. Residues on MHC within
     6 A will be sampled, except for those involved in disulfide bonds.
 
-    The result is saved to brikard.pdb and stored in sampler.brikard.
+    VDW 0.35 will produce nice unclashed structures, but it may take a long time, whereas
+    0.15 for example will produce conformations faster, but there will be clashes.
+
+    If sampling at a given VDW value fails, VDW be reduced until the desired number of conformations
+    is produced or `vdw_min` is hit.
+
+    The result is stored in sampler.brikard.
     """
 
     # TODO: add peptide preminimization
@@ -262,7 +268,7 @@ class PeptideSampler(object):
         try:
             helpers.remove_files(glob('mol_000001*.pdb'))
 
-            assemble_file_content = _assemble_production.format(brikard_lib=define.BRIKARD_DIR / 'lib',
+            assemble_file_content = _ASSEMBLE_PRODUCTION.format(brikard_lib=define.BRIKARD_DIR / 'lib',
                                                                 output_dir='.',
                                                                 resin=resin,
                                                                 resic=resic,
