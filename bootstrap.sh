@@ -64,6 +64,8 @@ python setup.py install
 cd ../
 rm -rf sb-lab-utils
 
+if [ '' ]; then
+
 # Install libjansson
 rm -rf "jansson-${JANSSON_VERSION}"
 wget "https://github.com/akheron/jansson/archive/v${JANSSON_VERSION}.tar.gz" -O jansson.tar.gz
@@ -157,6 +159,8 @@ make -j"$NUMPROC"
 cp minimize "${ENV_DIR}/bin"
 cd ../../
 rm -rf energy-min
+
+fi
 
 # Install the package itself
 pip install -e .

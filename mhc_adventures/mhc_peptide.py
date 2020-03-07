@@ -11,9 +11,8 @@ from subprocess import Popen, PIPE, STDOUT
 from . import define
 from . import utils
 from . import atom_naming
-from . import wrappers
-
-logger = define.logger
+from . import helpers
+from .define import logger
 
 _GDOMAINS_TABLE = pd.read_csv(define.TEMPLATE_MODELLER_DEFAULT_TABLE, index_col=0)
 
@@ -27,10 +26,15 @@ class BasePDB(object):
 
     def __init__(self, pdb_file=None, pdb_list=None, ag=None):
 
-        if not pdb_file is None:
-            self.ag = prody.parsePDB(pdb_file)
+        if pdb_file is not None:
+            if isinstance(pdb_file, prody.Atomic):
+                self.ag = pdb_file
+            elif isinstance(pdb_file, str):
+                self.ag = prody.parsePDB(pdb_file)
+            else:
+                raise ValueError('Wrong type of parameter `pdb_file` ({})'.format(type(pdb_file)))
 
-        elif not pdb_list is None:
+        elif pdb_list is not None:
             ag_first = prody.parsePDB(pdb_list[0])
             new_csets = []
             for f in pdb_list:
@@ -40,7 +44,7 @@ class BasePDB(object):
             ag_first.setCoords(np.array(new_csets))
             self.ag = ag_first
 
-        elif not ag is None:
+        elif ag is not None:
             self.ag = ag.copy()
 
         else:
@@ -58,7 +62,7 @@ class BasePDB(object):
             return csets
         raise TypeError('Wrong type of csets')
 
-    def renumber_residues(self, keep_resi=True, keep_chains=True):
+    def renumber(self, keep_resi=True, keep_chains=True):
         self.ag.setSerials(range(1, self.ag.numAtoms() + 1))
 
         if not keep_chains and self.ag.numChains() > len(self._chain_order):
@@ -78,7 +82,7 @@ class BasePDB(object):
         return new
 
     def get_sequence(self):
-        return self.ag.getSequence()
+        return self.copy().hsd_to_his().ag.calpha.getSequence()
 
     def add_hydrogens(self, trim=True, csets=None):
         raise NotImplementedError()
@@ -108,7 +112,7 @@ class BasePDB(object):
             p_finish.wait()
             print(reduced)
 
-            natoms_cur = len(filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), reduced))
+            natoms_cur = len(list(filter(lambda x: x.startswith('ATOM') or x.startswith('HETATM'), reduced)))
             if i == csets[0]:
                 natoms = natoms_cur
             elif natoms != natoms_cur:
@@ -124,7 +128,7 @@ class BasePDB(object):
                 logger.error('Called process returned ' + str(status))
 
         self.ag = prody.parsePDBStream(StringIO(''.join(output)))
-        self.renumber_residues()
+        self.renumber()
         return self
 
     def save(self, pdb, **kwargs):
@@ -162,7 +166,7 @@ class BasePDB(object):
         rtf = Path(rtf).abspath()
         prm = Path(prm).abspath()
 
-        with utils.isolated_filesystem():
+        with helpers.isolated_filesystem():
             if change_his:
                 self.his_to_hsd()
             self.save('input.pdb', csets=cset)
@@ -183,7 +187,7 @@ class BasePDB(object):
                 sblu_call += ['--patch-first', ','.join([x + ',CTER' for x in chains]),
                               '--patch-last', ','.join([x + ',NTER' for x in chains])]
 
-            wrappers.shell_call(sblu_call)
+            helpers.shell_call(sblu_call)
 
         if not (out_prefix + '.pdb').exists():
             raise RuntimeError('Preparation failed')
@@ -232,7 +236,7 @@ class BasePDB(object):
         if len(csets) == 1:
             self.ag = nmin_ag
             self.save(nmin)
-            return self
+            return self, psf
 
         if nmin_ag.numAtoms() == self.ag.numAtoms():
             if list(nmin_ag.getNames()) != list(self.ag.getNames()):
@@ -255,7 +259,7 @@ class BasePDB(object):
 
         self.ag = nmin_ag
         self.save(nmin)
-        return nmin, psf
+        return self, psf
 
     def to_rosetta(self):
         new_names = []
@@ -352,23 +356,58 @@ class BasePDB(object):
         """
         This behaves bad when molecules have same chain names
         """
-        m1 = self
-        m2 = mol
-        assert(m1.ag.numCoordsets() == m2.ag.numCoordsets())
+        ag1 = self.ag.copy()
+        ag2 = mol.ag.copy()
+        if ag1.numCoordsets() != ag2.numCoordsets():
+            raise RuntimeError('Atom groups have different numbers of coordinate sets')
+
+        nsets = ag1.numCoordsets()
+
+        chains1 = list(set(ag1.getChids()))
+        chains2 = list(set(ag2.getChids()))
+        all_chains = chains1 + chains2
+        if len(set(all_chains)) != len(all_chains) and keep_chains:
+            logger.warning('Two atom groups contain same chain IDs, merging can go wrong')
+            if keep_resi and len(set(ag1.getResnums()).intersection(set(ag2.getResnums()))) > 0:
+                raise RuntimeError('Refusing to merge atom groups which contain same chain IDs AND residue IDs')
+
+        if not keep_chains:
+            if len(chains1) + len(chains2) > len(self._chain_order):
+                raise RuntimeError('Total number of chains is too large, out of chain ID letters')
+
+            iter_chains = iter(self._chain_order)
+            map1 = {x: next(iter_chains) for x in chains1}
+            map2 = {x: next(iter_chains) for x in chains2}
+
+            for old, new in map1.items():
+                ag1.select('chain ' + old).setChids(new)
+            for old, new in map2.items():
+                ag2.select('chain ' + old).setChids(new)
+
+        if not keep_resi:
+            resi = 1
+            for r in ag1.getHierView().iterResidues():
+                r.setResnum(resi)
+                resi += 1
+            for r in ag2.getHierView().iterResidues():
+                r.setResnum(resi)
+                resi += 1
 
         buf = StringIO()
-        for i in range(m1.ag.numCoordsets()):
-            buf.write('MODEL\n')
-            prody.writePDBStream(buf, m1.ag, csets=i)
-            prody.writePDBStream(buf, m2.ag, csets=i)
-            buf.write('ENDMDL\n')
+        for i in range(nsets):
+            if nsets > 1:
+                buf.write('MODEL \n' + str(i + 1))
+            prody.writePDBStream(buf, ag1, csets=i)
+            prody.writePDBStream(buf, ag2, csets=i)
+            if nsets > 1:
+                buf.write('ENDMDL\n')
+            else:
+                buf.write('END\n')
 
         buf.seek(0)
-        joint = prody.parsePDBStream(buf)
+        joint = BasePDB(ag=prody.parsePDBStream(buf))
+        joint.renumber(keep_resi=True, keep_chains=True)
         buf.close()
-
-        joint = BasePDB(ag=joint)
-        joint.renumber_residues(keep_chains=keep_chains, keep_resi=keep_resi)
         return joint
 
     def __add__(self, mol):
