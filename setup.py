@@ -5,14 +5,14 @@ import numpy as np
 #                    sources=['mhc_adventures/source/molgrid/py_molgrid.cpp'],
 #                    include_dirs=[np.get_include()])
 
-setup(name='mhc_adventures',
+setup(name='mhc_tools',
       version='0.1',
       description='Process MHC structures and train predictors',
       url='https://github.com/ignatovmg/mhc-adventures',
       author='Mikhail Ignatov',
       author_email='ignatovmg@gmail.com',
       license='MIT',
-      packages=['mhc_adventures'],
+      packages=['mhc_tools'],
       include_package_data=True,
       zip_safe=False) #,
       #ext_modules=[cpp_ext])

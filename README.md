@@ -10,8 +10,8 @@ and specify their location in `vars.json.tpl`
 4. `pytest -v`
 
 So far usable and covered with tests are:
- * `from mhc_adventures.sampling.generate_peptides import PeptideSampler`
- * `from mhc_adventures.sampling.template_modelling import TemplateModeller`
- * `from mhc_adventures.mhc_peptide import BasePDB`
+ * `from mhc_tools.sampling.generate_peptides import PeptideSampler`
+ * `from mhc_tools.sampling.template_modelling import TemplateModeller`
+ * `from mhc_tools.mhc_peptide import BasePDB`
  
 The rest is in development
