@@ -17,7 +17,7 @@ from ..mhc_peptide import BasePDB
 from ..define import logger
 
 
-_TEMPLATES_DIR = PACKAGE_ROOT = Path(__file__).abspath().dirname() / 'ptemplates'
+_TEMPLATES_DIR = Path(__file__).abspath().dirname() / 'ptemplates'
 
 
 _ASSEMBLE_PRODUCTION = '''Chain: two loops
