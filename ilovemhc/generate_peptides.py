@@ -188,7 +188,7 @@ class PeptideSampler(object):
     def _generate_template_custom(self, name):
         bbnames = ['C', 'O', 'CA', 'N', 'OXT']
         lgt = len(self.pep_seq)
-        tpl = Path(define.PEPTIDE_TEMPLATES_DIR).joinpath(name)
+        tpl = Path(name)
         tpl = prody.parsePDB(tpl)
 
         for r, newname in zip(tpl.iterResidues(), self.pep_seq):
@@ -372,7 +372,7 @@ class PeptideSampler(object):
         if self.rec:
             rec = BasePDB(ag=self.rec)
             rec.ag.setChids('A')
-            merged = rec + pep
+            merged = rec.add_mol(pep, keep_resi=False, keep_chains=True)
             for i, r in enumerate(merged.ag.iterResidues(), 1):
                 r.setResnum(i)
             merged.ag.setChids('A')
@@ -450,7 +450,6 @@ class PeptideSampler(object):
         if sample_resi_within is not None:
             logger.info('Finding residues on the receptor to sample')
             sel = '(same residue as exwithin %f of (resnum %i:%i)) and name CA' % (sample_resi_within, resin, resic)
-            print(self._input)
             sel = self._input.select(sel)
 
             # dont sample disulfide bonds

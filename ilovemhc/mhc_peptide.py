@@ -31,7 +31,6 @@ class BasePDB(object):
 
         if not pdb_file is None:
             self.ag = prody.parsePDB(pdb_file)
-            print(self.ag)
             if read_energy:
                 self.energy_table = self.read_energy_from_pdb(pdb_file)
 
@@ -431,14 +430,13 @@ class BasePDB(object):
             buf.write('ENDMDL\n')
 
         buf.seek(0)
-
+        
         joint = prody.parsePDBStream(buf)
-
         buf.close()
 
-        joint = BasePDB(ag=joint)
-        joint.renumber(keep_chains=keep_chains, keep_resi=keep_resi)
-        return joint
+        res = BasePDB(ag=joint)
+        res = res.renumber(keep_chains=keep_chains, keep_resi=keep_resi)
+        return res
 
     def __add__(self, mol):
         return self.add_mol(mol)
