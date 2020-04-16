@@ -38,7 +38,7 @@ TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/anal
 ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
 
 # brikard
-BRIKARD_DIR = '/gpfs/projects/KozakovGroup/software/brikard'
+BRIKARD_DIR = '/home/cubazis/Projects/Laba/LPRJ2/brikard_cash/'
 BRIKARD_LIB = os.path.join(BRIKARD_DIR, 'lib')
 BRIKARD_EXE = os.path.join(BRIKARD_DIR, 'bin/brikard')
 ASSEMBLE_EXE = os.path.join(BRIKARD_DIR, 'bin/assemble')
