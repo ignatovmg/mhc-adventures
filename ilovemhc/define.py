@@ -51,7 +51,7 @@ FLEXPEPDOCK_EXE = os.path.join(ROSETTA_DIR, 'main/source/bin/FlexPepDocking.linu
 
 # external
 REDUCE_EXE = '/gpfs/projects/KozakovGroup/software/reduce.3.23.130521.linuxi386'
-SCWRL_EXE = '/gpfs/projects/KozakovGroup/software/scwrl4/Scwrl4'
+SCWRL_EXE = '/gpfs/software/scwrl4/Scwrl4'
 MINIMIZE_EXE = '/gpfs/projects/KozakovGroup/software/minimization-libmol2/build/minimize'
 CCMPRED_EXE = '/gpfs/projects/KozakovGroup/software/CCMpred/bin/ccmpred'
 NNALIGN_EXE = '/gpfs/projects/KozakovGroup/software/nnalign-2.1/nnalign'
