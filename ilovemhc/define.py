@@ -38,7 +38,7 @@ TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/anal
 ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
 
 # brikard
-BRIKARD_DIR = '/home/cubazis/Projects/Laba/LPRJ2/brikard_cash/'
+BRIKARD_DIR = '/gpfs/software/brikard_cash/'
 BRIKARD_LIB = os.path.join(BRIKARD_DIR, 'lib')
 BRIKARD_EXE = os.path.join(BRIKARD_DIR, 'bin/brikard')
 ASSEMBLE_EXE = os.path.join(BRIKARD_DIR, 'bin/assemble')
@@ -51,7 +51,7 @@ FLEXPEPDOCK_EXE = os.path.join(ROSETTA_DIR, 'main/source/bin/FlexPepDocking.linu
 
 # external
 REDUCE_EXE = '/gpfs/projects/KozakovGroup/software/reduce.3.23.130521.linuxi386'
-SCWRL_EXE = '/gpfs/projects/KozakovGroup/software/scwrl4/Scwrl4'
+SCWRL_EXE = '/gpfs/software/scwrl4/Scwrl4'
 MINIMIZE_EXE = '/gpfs/projects/KozakovGroup/software/minimization-libmol2/build/minimize'
 CCMPRED_EXE = '/gpfs/projects/KozakovGroup/software/CCMpred/bin/ccmpred'
 NNALIGN_EXE = '/gpfs/projects/KozakovGroup/software/nnalign-2.1/nnalign'
