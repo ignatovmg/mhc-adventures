@@ -1,41 +1,51 @@
-import logging.config
-from path import Path
-import json
+import os
+import logging
 
-SRC_DIR = Path(__file__).abspath().dirname()
-ROOT_DIR = SRC_DIR.dirname()
-
-with open(ROOT_DIR / 'vars.json', 'r') as f:
-    _VARS = json.load(f)
+PACKAGE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # logging
-logger = logging.getLogger('console')
+LOGGING_CONF = os.path.join(os.path.dirname(PACKAGE_ROOT), 'logging.conf')
+logger = logging.getLogger('debug')
+
+# directories
+SRC_DIR = os.path.join(PACKAGE_ROOT, 'source')
+BIN_DIR = os.path.join(PACKAGE_ROOT, 'executables')
+MOL_PRM_DIR = os.path.join(PACKAGE_ROOT, 'mol-prms')
+PDB_PREP_DIR = os.path.join(BIN_DIR, 'pdb_prep')
+GRID_PRM_DIR = os.path.join(PACKAGE_ROOT, 'grid-prms')
+TEST_DIR = os.path.join(PACKAGE_ROOT, 'data/test_data')
+PEPTIDE_TEMPLATES_DIR = os.path.join(PACKAGE_ROOT, 'ptemplates')
 
 # parameters
-RTF22_FILE = SRC_DIR / 'mol-prms' / 'top_all22_prot_changed_atom_names.rtf'
-PRM22_FILE = SRC_DIR / 'mol-prms' / 'par_all22_prot.prm'
+RTF22_FILE = os.path.join(MOL_PRM_DIR, 'top_all22_prot_changed_atom_names.rtf')
+PRM22_FILE = os.path.join(MOL_PRM_DIR, 'par_all22_prot.prm')
+ATOM_PROPERTY22_FILE = os.path.join(GRID_PRM_DIR, 'props_new.csv')
+ATOM_TYPES22_FILE = os.path.join(GRID_PRM_DIR, 'types_new.csv')
+ATOM_PROPERTY_DEFAULT = ATOM_PROPERTY22_FILE
+ATOM_TYPES_DEFAULT = ATOM_TYPES22_FILE
+
+# executables
+PDBPREP_EXE = os.path.join(PDB_PREP_DIR, 'pdbprep.pl')
+PDBNMD_EXE = os.path.join(PDB_PREP_DIR, 'pdbnmd.pl')
+PSFGEN_EXE = os.path.join(PDB_PREP_DIR, 'psfgen')
+NMIN_EXE = os.path.join(PDB_PREP_DIR, 'nmin')
+GRID_EXE = os.path.join(BIN_DIR, 'property_grid')
 
 # misc
-GDOMAINS_DIR = Path(_VARS['GDOMAINS_DIR'])
-PLIP_DIR = Path(_VARS['PLIP_DIR'])
-TEMPLATE_MODELLER_DEFAULT_TABLE = GDOMAINS_DIR / 'gdomains-complete.csv'
+GDOMAINS_DIR = '/datasets/gdomains'
+TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/gdomains-complete.csv'
 ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
 
+CHIMERA_EXE = '/usr/local/bin/chimera'
+
 # brikard
-BRIKARD_DIR = Path(_VARS['BRIKARD_DIR'])
-BRIKARD_EXE = BRIKARD_DIR / 'bin' / 'brikard'
-
-# chimera
-CHIMERA_EXE = Path(_VARS['CHIMERA'])
-
-# rosetta
-ROSETTA_DIR = Path(_VARS['ROSETTA_DIR'])
-ROSETTA_DB = ROSETTA_DIR / 'main' / 'database'
-FLEXPEPDOCK_EXE = ROSETTA_DIR / 'main' / 'source' / 'bin' / 'FlexPepDocking.linuxgccrelease'
+BRIKARD_DIR = '/gpfs/software/brikard_cash/'
+BRIKARD_LIB = os.path.join(BRIKARD_DIR, 'lib')
+BRIKARD_EXE = os.path.join(BRIKARD_DIR, 'bin/brikard')
+ASSEMBLE_EXE = os.path.join(BRIKARD_DIR, 'bin/assemble')
+MISSING_LOOPS_EXE = os.path.join(BRIKARD_DIR, 'bin/missing_loops')
 
 # external
 REDUCE_EXE = '/gpfs/projects/KozakovGroup/software/reduce.3.23.130521.linuxi386'
-SCWRL_EXE = _VARS['SCWRL']
-MINIMIZE_EXE = _VARS['MIN_EXE']
-CCMPRED_EXE = '/gpfs/projects/KozakovGroup/software/CCMpred/bin/ccmpred'
-NNALIGN_EXE = '/gpfs/projects/KozakovGroup/software/nnalign-2.1/nnalign'
+SCWRL_EXE = '/gpfs/software/scwrl4/Scwrl4'
+
