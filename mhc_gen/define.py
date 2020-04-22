@@ -1,5 +1,6 @@
 import os
 import logging
+from path import Path
 
 PACKAGE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -33,17 +34,21 @@ GRID_EXE = os.path.join(BIN_DIR, 'property_grid')
 
 # misc
 GDOMAINS_DIR = '/datasets/gdomains'
-TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/gdomains-complete.csv'
-ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
 
-CHIMERA_EXE = '/usr/local/bin/chimera'
+GDOMAINS_ADD = os.path.join(PACKAGE_ROOT, 'additional')
+TEMPLATE_MODELLER_DEFAULT_TABLE = os.path.join(GDOMAINS_ADD, 'gdomains-complete.csv')
+ALLELE_SEQUENCES_CSV = os.path.join(GDOMAINS_ADD, 'allele_sequences_reduced.csv')
+#TEMPLATE_MODELLER_DEFAULT_TABLE = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/gdomains-complete.csv'
+#ALLELE_SEQUENCES_CSV = '/gpfs/projects/KozakovGroup/mhc_learning/analysis/allele_sequences_reduced.csv'
+
+CHIMERA_EXE = Path('/usr/local/bin/chimera')
 
 # brikard
-BRIKARD_DIR = '/gpfs/software/brikard_cash/'
-BRIKARD_LIB = os.path.join(BRIKARD_DIR, 'lib')
-BRIKARD_EXE = os.path.join(BRIKARD_DIR, 'bin/brikard')
-ASSEMBLE_EXE = os.path.join(BRIKARD_DIR, 'bin/assemble')
-MISSING_LOOPS_EXE = os.path.join(BRIKARD_DIR, 'bin/missing_loops')
+BRIKARD_DIR = Path('/gpfs/software/brikard_cash/')
+BRIKARD_LIB = BRIKARD_DIR / 'lib'
+BRIKARD_EXE = BRIKARD_DIR / 'bin/brikard'
+ASSEMBLE_EXE = BRIKARD_DIR / 'bin/assemble'
+MISSING_LOOPS_EXE = BRIKARD_DIR / 'bin/missing_loops'
 
 # external
 REDUCE_EXE = '/gpfs/projects/KozakovGroup/software/reduce.3.23.130521.linuxi386'
