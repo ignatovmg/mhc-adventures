@@ -69,7 +69,7 @@ def test_instantiate_with_seq_and_custom_template():
     assert sampler.pep.numAtoms() > 10
 
 
-@pytest.mark.parametrize('nsamples', [1, 10, 100, 1000])
+@pytest.mark.parametrize('nsamples', [1, 10, 100, 1000, 15000])
 def test_generate_simple(nsamples):
     with isolated_filesystem():
         sampler = PeptideSampler(pep=utils.load_gdomains_peptide('1ao7'))
