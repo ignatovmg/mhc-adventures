@@ -166,7 +166,7 @@ class PeptideSampler(object):
 
         # sampled peptides will be here
         self.brikard = None
-        self.brikard_raw_file = None
+        self.brikard_raw_files = None
 
     def clean(self):
         self._seq_file.remove_p()
@@ -178,8 +178,8 @@ class PeptideSampler(object):
         self.wdir.joinpath('test0.pdb').remove_p()
         self.wdir.joinpath('test1.pdb').remove_p()
         self.wdir.joinpath('assemble.tmp').remove_p()
-        if self.brikard_raw_file:
-            self.brikard_raw_file.remove_p()
+        if self.brikard_raw_files is not None:
+            [x.remove_p() for x in self.brikard_raw_files]
 
     @staticmethod
     def _check_sequence(pep_seq):
@@ -254,7 +254,7 @@ class PeptideSampler(object):
         oldpwd = Path.getcwd()
         outdir.chdir()
 
-        self.brikard_raw_file = None
+        self.brikard_raw_files = None
         self.brikard = None
 
         residues = range(resin, resic + 1)
@@ -341,10 +341,14 @@ class PeptideSampler(object):
                 oldpwd.chdir()
                 return
 
-            brikard_raw = brikard_raw[0]
             logger.info('Using %s' % brikard_raw)
-            self.brikard_raw_file = outdir.joinpath(Path(brikard_raw))
-            self.brikard = prody.parsePDB(brikard_raw)
+            self.brikard_raw_files = [outdir / x for x in brikard_raw]
+            self.brikard = prody.parsePDB(brikard_raw[0])
+
+            combined_coords = [self.brikard.getCoordsets()]
+            for x in brikard_raw[1:]:
+                combined_coords.append(prody.parsePDB(x).getCoordsets())
+            self.brikard.setCoords(np.concatenate(combined_coords))
 
         except Exception:
             oldpwd.chdir()
