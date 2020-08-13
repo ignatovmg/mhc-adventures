@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-
 # Directories to use
 SRC_DIR="$(cd $(dirname "$0") && pwd)"
 ENV_DIR="${SRC_DIR}/venv"
 NUMPROC=$(nproc)
 
 # Specific commits to checkout
-PRODY_VERSION=1.10
+PRODY_VERSION=1.10.11
 SBLU_COMMIT=0cdd4ef
-LIBMOL2_COMMIT=5adf65f # TODO: 30c3bc7 - this latest version fails, need to figure why
-LIBNMRGRAD_COMMIT=16a24c4
-ENERGYMIN_COMMIT=2452d6a
+LIBMOL2_COMMIT=a2a40df
+NGRMIN_COMMIT=52c18802
 JANSSON_VERSION=2.12
 CHECK_VERSION=0.14.0
 
@@ -22,7 +20,6 @@ CHECK_VERSION=0.14.0
 # Create vars.json
 sed "s:#SRC_DIR#:${SRC_DIR}:g" vars.json.tpl > vars.json
 sed -i "s:#MIN_EXE#:${ENV_DIR}/bin/minimize:g" vars.json
-
 
 # load modules
 if [[ "$(hostname)" == login* ]]; then
@@ -48,6 +45,8 @@ export PATH="${ENV_DIR}/lib:${PATH}"
 export LD_LIBRARY_PATH="${ENV_DIR}/lib:${LD_LIBRARY_PATH}"
 set -u
 
+if [ '1' ]; then
+
 # Install ProDy
 pip install prody==${PRODY_VERSION}
 
@@ -63,8 +62,6 @@ pip install -r requirements/pipeline.txt
 python setup.py install
 cd ../
 rm -rf sb-lab-utils
-
-if [ '' ]; then
 
 # Install libjansson
 rm -rf "jansson-${JANSSON_VERSION}"
@@ -86,6 +83,8 @@ wget https://github.com/libcheck/check/releases/download/${CHECK_VERSION}/check-
 tar xvf check-${CHECK_VERSION}.tar.gz
 rm -f check-${CHECK_VERSION}.tar.gz
 cd "check-${CHECK_VERSION}"
+# Check.h needs to be removed, this is why https://github.com/libcheck/check/issues/172#issuecomment-588405110
+rm -f src/check.h
 mkdir build
 cd build
 cmake -DCMAKE_INSTALL_PREFIX="${ENV_DIR}" -DCMAKE_INSTALL_LIBDIR=lib ../
@@ -106,61 +105,46 @@ make install
 cd ../
 rm -rf gperf-3.1
 
-# Install GSL
-rm -rf gsl-2.4
-wget ftp://ftp.gnu.org/gnu/gsl/gsl-2.4.tar.gz
-tar xvf gsl-2.4.tar.gz
-rm -f gsl-2.4.tar.gz
-cd gsl-2.4
-./configure --prefix "${ENV_DIR}"
-make -j"$NUMPROC"
-make install
-cd ../
-rm -rf gsl-2.4
+fi
 
 # Install libmol2
 rm -rf libmol2
 git clone https://bitbucket.org/bu-structure/libmol2.git
 cd libmol2
-git checkout $LIBMOL2_COMMIT
+git checkout ${LIBMOL2_COMMIT}
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=YES -DUSE_LTO=NO -DCMAKE_INSTALL_PREFIX="${ENV_DIR}" \
-      -DCMAKE_C_FLAGS="-I ${ENV_DIR}/include -I /usr/local/include -L ${ENV_DIR}/lib" ../
+cmake -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=ON \
+    -DUSE_LTO=OFF \
+    -DCMAKE_PREFIX_PATH="${ENV_DIR}" \
+    -DCMAKE_INSTALL_PREFIX="${ENV_DIR}" \
+    -DBUILD_NOE=OFF \
+    ..
+
 make -j"$NUMPROC"
 make test
 make install
 cd ../../
 rm -rf libmol2
 
-# Install libnmrgrad
-rm -rf libnmrgrad
-git clone https://ignatovmg@bitbucket.org/ignatovmg/libnmrgrad.git
-cd libnmrgrad
-git checkout $LIBNMRGRAD_COMMIT
-rm -rf build && mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="${ENV_DIR}" -DCMAKE_C_FLAGS="-I ${ENV_DIR}/include -L ${ENV_DIR}/lib" ../
+# Install nrgmin
+rm -rf nrgmin
+git clone https://ignatovmg@bitbucket.org/ignatovmg/nrgmin.git
+cd nrgmin
+git checkout ${NGRMIN_COMMIT}
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=ON \
+    -DOPENMP=ON \
+    -DCMAKE_PREFIX_PATH="${ENV_DIR}" \
+    -DNOE=OFF \
+    ..
 make -j"$NUMPROC"
 make test
-make install
+cp nrgmin nrgmin.omp "${ENV_DIR}/bin"
 cd ../../
-rm -rf libnmrgrad
-
-# Install energy-min
-rm -rf energy-min
-git clone https://ignatovmg@bitbucket.org/ignatovmg/energy-min.git
-cd energy-min
-git checkout $ENERGYMIN_COMMIT
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS="-I ${ENV_DIR}/include -L ${ENV_DIR}/lib" ../
-make -j"$NUMPROC"
-cp minimize "${ENV_DIR}/bin"
-cd ../../
-rm -rf energy-min
-
-fi
+rm -rf nrgmin
 
 # Install the package itself
 pip install -e .
